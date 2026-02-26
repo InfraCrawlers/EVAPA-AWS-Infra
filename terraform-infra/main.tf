@@ -17,9 +17,6 @@ terraform {
 # Configure the AWS provider to use the us-east-1 region
 provider "aws" {
   region = "us-east-1"
-  access_key = "AKIAVOAK3JRMIFDIXNVJ"
-  secret_key = "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"
-
 }
 
 resource "aws_s3_bucket" "s3_openvas_reports" {
