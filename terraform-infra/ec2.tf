@@ -74,17 +74,19 @@ EOF
   }
 }
 
+
 # The OpenVAS scanner instance is configured with a user data script that installs and sets up OpenVAS (Greenbone Vulnerability Manager) on an Ubuntu instance. The script ensures the system is fully patched, installs the necessary packages, and starts the OpenVAS services. This instance serves as the vulnerability scanner in the lab environment.
 resource "aws_instance" "openvas" {
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t3.small"
+  instance_type          = "t3.large"
   iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
-  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
+  vpc_security_group_ids = [aws_security_group.openvas_sg.id]
   key_name               = var.key_name
-  user_data = <<-EOF
-#!/bin/bash
-apt update && apt upgrade -y
-EOF
+  user_data              = file("openvas.sh")
+  root_block_device {
+    volume_size = 50 
+    volume_type = "gp3"
+  }
   tags = {
     Name    = "OpenVAS-Scanner"
     Role    = "VulnerabilityScanner"
