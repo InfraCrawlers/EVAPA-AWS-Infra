@@ -1,9 +1,11 @@
 # Enterprise Vulnerability Assessment & Patching Automation (AWS)
 
 ## Project Overview
-This project implements an enterprise-style vulnerability management workflow on AWS, inspired by industry tools such as Rapid7 InsightVM and SCCM, using cloud-native services and open-source tooling.
+This project implements an enterprise-style vulnerability management workflow on AWS using Infrastructure as Code (Terraform), AWS Systems Manager, and the open-source vulnerability scanner OpenVAS (Greenbone Community Edition).
 
-The solution demonstrates how operating system–level vulnerabilities can be identified, prioritized, remediated, and validated in a controlled cloud environment using Infrastructure as Code (Terraform) and AWS Systems Manager.
+The environment simulates a real-world vulnerability management lifecycle where systems are intentionally deployed in a vulnerable state, scanned for vulnerabilities, remediated through patching, and re-scanned to validate remediation effectiveness.
+
+The project architecture mirrors common enterprise security workflows similar to those implemented using tools such as Rapid7 InsightVM and SCCM, but implemented using cloud-native infrastructure.
 
 ---
 
@@ -11,128 +13,180 @@ The solution demonstrates how operating system–level vulnerabilities can be id
 The environment consists of three core components:
 
 - **OpenVAS Scanner EC2**  
-  Hardened Ubuntu-based instance used exclusively for vulnerability scanning.
+  A dedicated Ubuntu-based EC2 instance running the Greenbone Community Edition (OpenVAS) scanner inside Docker containers.
+  This scanner performs vulnerability assessments against the target systems and generates security reports.
 
 - **Ubuntu 20.04 Target EC2**  
-  Linux target intentionally left unpatched and configured with vulnerable services for baseline vulnerability assessment.
+  An Ubuntu 20.04 EC2 instance intentionally configured with outdated packages and legacy services to simulate real-world vulnerabilities.
 
 - **Windows Server 2019 Target EC2**  
-  Windows target with automatic updates disabled to simulate enterprise patch lag scenarios.
+  A Windows Server 2019 EC2 instance with Windows Update disabled to simulate enterprise patch lag scenarios.
 
 All EC2 instances are managed using **AWS Systems Manager (SSM)** with no direct SSH or RDP exposure.
 
 ---
 
-## Infrastructure as Code
+## Infrastructure Provisioning
 All infrastructure is provisioned using **Terraform**, ensuring:
 
-- Repeatable deployments
-- Version-controlled configuration
-- Team collaboration using a remote Terraform backend
-- Enterprise-aligned governance and auditability
+- Repeatable infrastructure deployments
+- Version-controlled environment configuration
+- Team collaboration through remote state management
+- Infrastructure auditability and traceability
 
-### Terraform Backend
-- **S3** for remote state storage
-- **DynamoDB** for state locking
-- **us-east-1** as the standardized region
+Terraform automatically provisions:
+
+- EC2 instances
+- IAM roles and policies
+- Security groups
+- S3 storage for vulnerability reports
 
 ---
 
-## OpenVAS Scanner Design Decision
-The OpenVAS EC2 instance is provisioned as a **hardened base system only**:
+### Terraform Backend Configuration
+Terraform state is stored remotely to support safe collaboration between team members.
+
+Backend configuration includes:
+
+- **Amazon S3** for remote state storage
+- **Amazon DynamoDB** for state locking
+- **Server-side encryption enabled**
+- **Single AWS region (us-east-1)**
+
+This setup prevents concurrent infrastructure changes and ensures infrastructure state integrity.
+---
+
+## Repository Structure
+```bash
+terraform-bootstrap/
+ ├── main.tf
+ ├── README.md
+
+terraform-infra/
+ ├── backend.tf
+ ├── main.tf
+ ├── ec2.tf
+ ├── sg.tf
+ ├── variables.tf
+ ├── outputs.tf
+ ├── openvas.sh
+ ├── README.md
+```
+**terraform-bootstrap**
+
+Contains Terraform code used once to provision the Terraform backend infrastructure:
+- S3 state bucket
+- DynamoDB locking table
+
+**terraform-infra**
+
+Contains the main infrastructure configuration for the vulnerability management lab.
+
+---
+
+## OpenVAS Deployment
+The OpenVAS scanner is automatically installed using a Terraform user-data script (openvas.sh) that:
+
+1. Installs Ansible and required dependencies
+2. Installs Docker
+3. Downloads the official Greenbone Community Edition Docker stack
+4. Pulls required container images
+5. Deploys the OpenVAS stack using Docker Compose
+6. The scanner exposes the **Greenbone Web UI on port 9392.**
+
+The OpenVAS EC2 instance uses:
+
+- Instance type: t3.large
+- Root disk: 50GB
+- Docker-based Greenbone deployment
+- Automated provisioning using Ansible
+
+---
+
+## Vulnerability Simulation
+
+To generate realistic vulnerability findings, the target systems are intentionally configured with insecure configurations.
+
+**Ubuntu Target**
+
+The Linux target instance disables automatic updates and installs vulnerable services including:
+
+- Apache
+- Samba
+- MySQL
+- Telnet
+- RSH
+- SNMP
+- PHP
+- VSFTPD
+This creates multiple detectable vulnerabilities for OpenVAS scanning.
+
+**Windows Target**
+
+The Windows target disables automatic patching by:
+- Disabling the Windows Update service
+- Blocking automatic updates via registry policy
+
+This allows the scanner to detect missing security patches and OS vulnerabilities.
+
+---
+
+## S3-Based Vulnerability Report Storage
+
+An Amazon S3 bucket is created for storing OpenVAS scan reports.
+
+The bucket includes logical directories for organizing reports:
 
 ```bash
-apt update && apt upgrade -y
+s3://capstone-vuln-mgmt-openvas-reports/
+ ├── linux/
+ └── windows/
 ```
 
-### Rationale
-
-OpenVAS installation and feed synchronization are intentionally not automated in Terraform user data due to their long-running, stateful, and interactive nature.
-
-This approach:
-
-- Prevents package corruption during bootstrapping
-
-- Avoids cloud-init timeouts
-
-- Mirrors real-world enterprise scanner deployments
-
-- Allows controlled troubleshooting and documentation
-
-Scanner installation and configuration are performed manually by the designated team member responsible for vulnerability assessment.
+The OpenVAS instance receives a dedicated IAM policy allowing it to upload scan results to this bucket.
 
 ---
-
-## Intentional Vulnerabilities (Targets)
-
-The Ubuntu and Windows target instances are intentionally configured to introduce vulnerabilities:
-
-Ubuntu 20.04
-
-- Automatic updates disabled
-
-- Kernel updates held
-
-- Legacy and commonly vulnerable services installed
-
-- Used to demonstrate Linux package and configuration vulnerabilities
-
-Windows Server 2019
-
-- Windows Update service disabled
-
-- Automatic updates blocked via registry policy
-
-- Used to demonstrate missing OS patch vulnerabilities
-
-These configurations create a consistent baseline vulnerability state for before-and-after remediation analysis.
 
 ## Access Model
 
-- AWS Systems Manager Session Manager is used for all administrative access
+Administrative access to the environment follows security best practices:
 
-- No inbound security group rules
+- AWS Systems Manager Session Manager is used for EC2 management
+- SSH access is limited to the OpenVAS host
+- No direct RDP access is required for Windows management
+- Target machines accept scanning traffic only from the scanner
 
-- No public IP exposure
+This architecture reduces attack surface while maintaining operational access.
 
-- No SSH or RDP access
+---
 
-This aligns with enterprise security best practices.
-
-## Project Phases
+## Project Workflow
 
 1) AWS account hardening and governance
+2) Deploy infrastructure using Terraform
+3) Establish a vulnerable baseline environment
+4) Run vulnerability scans using OpenVAS
+5) Export scan reports to Amazon S3
+6) Analyze vulnerabilities using CVSS scores
+7) Apply remediation patches using AWS Systems Manager
+8) Perform re-scans to verify remediation effectiveness
+9) Generate final vulnerability metrics and reports
 
-2) Infrastructure deployment using Terraform
-
-3) Intentional vulnerability baseline creation
-
-4) Vulnerability scanning using OpenVAS
-
-5) Risk-based analysis and prioritization
-
-4) Manual patch remediation using AWS SSM
-
-5) Post-remediation re-scanning and validation
-
-6) Reporting and metrics generation
+---
 
 ## Key Learning Outcomes
 
+This project demonstrates practical experience with:
+
+- Infrastructure as Code using Terraform
+- Cloud security architecture design
 - Enterprise vulnerability management workflows
+- Vulnerability scanning and CVSS risk analysis
+- Secure AWS environment configuration
+- Automated infrastructure deployment
 
-- Secure cloud infrastructure design
-
-- Infrastructure as Code collaboration
-
-- Risk-based patch decision-making
-
-- Audit-ready security documentation
-
-## Notes
-
-This repository focuses on infrastructure provisioning and target configuration. Scanner setup, scan execution, and report generation are documented separately as part of the vulnerability assessment phase.
+---
 
 ## Disclaimer
 
-This project is for educational purposes only. Vulnerable configurations are intentionally created in an isolated environment and must never be deployed in production systems.
+This environment intentionally deploys vulnerable systems for educational purposes only. These configurations must never be used in production environments.
