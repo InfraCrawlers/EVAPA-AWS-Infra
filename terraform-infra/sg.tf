@@ -5,12 +5,12 @@
 resource "aws_security_group" "ec2_sg" {
   name        = "${var.project_name}-sg"
   description = "Minimal SG for EC2 vulnerability lab"
-  
+
   ingress {
-    description     = "Allow OpenVAS full TCP scan"
-    from_port       = 0
-    to_port         = 65535
-    protocol        = "tcp"
+    description = "Allow OpenVAS full TCP scan"
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
     # This points to the other SG resource in your file
     security_groups = [aws_security_group.openvas_sg.id]
   }
@@ -45,7 +45,7 @@ resource "aws_security_group" "openvas_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] 
+    cidr_blocks = ["0.0.0.0/0"]
     # Note: For better security, replace 0.0.0.0/0 with your actual local public IP
   }
 

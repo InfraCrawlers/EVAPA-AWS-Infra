@@ -23,17 +23,7 @@ resource "aws_instance" "linux_ubuntu" {
   iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
   key_name               = var.key_name
-
-  user_data = <<-EOF
-#!/bin/bash
-systemctl stop unattended-upgrades
-systemctl disable unattended-upgrades
-sed -i 's/"1"/"0"/g' /etc/apt/apt.conf.d/20auto-upgrades
-apt-mark hold linux-generic
-apt update
-apt install -y apache2 vsftpd samba mysql-server telnetd rsh-server snmpd php
-EOF
-
+  user_data              = file("${path.module}/scripts/linux.sh")
   tags = {
     Name             = "Ubuntu-Vuln-Target"
     OS               = "Ubuntu20.04"
@@ -50,21 +40,7 @@ resource "aws_instance" "windows" {
   iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
   key_name               = var.key_name
-  user_data = <<-EOF
-<powershell>
-# Disable Windows Update service
-Stop-Service -Name wuauserv -Force
-Set-Service -Name wuauserv -StartupType Disabled
-
-# Disable automatic updates via registry
-New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU" -Force
-Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate\\AU" `
-  -Name NoAutoUpdate -Value 1 -Type DWord
-
-# Log intentional vulnerable state
-"Intentional vulnerable state configured" | Out-File C:\\vuln-lab.txt
-</powershell>
-EOF
+  user_data              = file("${path.module}/scripts/windows.ps1")
 
   tags = {
     Name             = "Windows-Vuln-Target"
@@ -74,7 +50,6 @@ EOF
   }
 }
 
-
 # The OpenVAS scanner instance is configured with a user data script that installs and sets up OpenVAS (Greenbone Vulnerability Manager) on an Ubuntu instance. The script ensures the system is fully patched, installs the necessary packages, and starts the OpenVAS services. This instance serves as the vulnerability scanner in the lab environment.
 resource "aws_instance" "openvas" {
   ami                    = data.aws_ami.ubuntu.id
@@ -82,14 +57,19 @@ resource "aws_instance" "openvas" {
   iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
   vpc_security_group_ids = [aws_security_group.openvas_sg.id]
   key_name               = var.key_name
-  user_data              = file("openvas.sh")
+  user_data              = file("${path.module}/scripts/openvas.sh")
   root_block_device {
-    volume_size = 50 
+    volume_size = 50
     volume_type = "gp3"
   }
   tags = {
     Name    = "OpenVAS-Scanner"
     Role    = "VulnerabilityScanner"
     Project = var.project_name
+  }
+
+  lifecycle {
+    ignore_changes  = all
+    prevent_destroy = true
   }
 }
