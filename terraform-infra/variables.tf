@@ -5,7 +5,7 @@ variable "project_name" {
 }
 
 variable "instance_type" {
-  default = "t3.micro"
+  default = "t3.medium"
 }
 
 variable "key_name" {
