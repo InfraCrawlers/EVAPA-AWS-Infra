@@ -9,7 +9,7 @@ import boto3
 s3 = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
 
-TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME', 'openvas-findings')
+TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME', 'openvas-scan-findings')
 table = dynamodb.Table(TABLE_NAME)
 
 def lambda_handler(event, context):

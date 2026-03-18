@@ -30,6 +30,10 @@ resource "aws_instance" "linux_ubuntu" {
     AssetCriticality = "Medium"
     Project          = var.project_name
   }
+    lifecycle {
+    ignore_changes  = all
+    prevent_destroy = true
+  }
 }
 
 # Windows Server 2019 is chosen for the Windows target to provide a modern environment with relevant vulnerabilities

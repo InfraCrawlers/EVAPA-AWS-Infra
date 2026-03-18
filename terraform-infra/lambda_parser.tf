@@ -1,6 +1,6 @@
 resource "aws_lambda_function" "openvas_parser" {
 
-  function_name = "new_s3triggerforlambda"
+  function_name = "s3triggerforlambda"
   runtime       = "python3.11"
   handler       = "openvas_lambda.lambda_handler"
 
