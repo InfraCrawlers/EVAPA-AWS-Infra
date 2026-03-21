@@ -5,6 +5,13 @@ set -e
 
 echo "Updating system and installing build dependencies..."
 sudo apt update -y
+
+# Install and enable SSM Agent
+snap install amazon-ssm-agent --classic
+
+systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+
 sudo apt install -y build-essential wget curl unzip git libssl-dev libxml2-dev \
 libpcre3-dev zlib1g-dev libncurses5-dev openjdk-8-jdk php php-mysql \
 mysql-server apache2 libreadline-dev libcap-dev net-tools

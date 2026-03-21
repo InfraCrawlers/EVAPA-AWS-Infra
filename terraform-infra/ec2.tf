@@ -30,10 +30,10 @@ resource "aws_instance" "linux_ubuntu" {
     AssetCriticality = "Medium"
     Project          = var.project_name
   }
-    lifecycle {
-    ignore_changes  = all
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   ignore_changes  = all
+  #   prevent_destroy = true
+  # }
 }
 
 # Windows Server 2019 is chosen for the Windows target to provide a modern environment with relevant vulnerabilities
@@ -56,7 +56,7 @@ resource "aws_instance" "windows" {
 
 # The OpenVAS scanner instance is configured with a user data script that installs and sets up OpenVAS (Greenbone Vulnerability Manager) on an Ubuntu instance. The script ensures the system is fully patched, installs the necessary packages, and starts the OpenVAS services. This instance serves as the vulnerability scanner in the lab environment.
 resource "aws_instance" "openvas" {
-  ami                    = data.aws_ami.ubuntu.id
+  ami                    = data.aws_ami.ubuntu2204.id
   instance_type          = "t3.large"
   iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
   vpc_security_group_ids = [aws_security_group.openvas_sg.id]
@@ -72,8 +72,8 @@ resource "aws_instance" "openvas" {
     Project = var.project_name
   }
 
-  lifecycle {
-    ignore_changes  = all
-    prevent_destroy = true
-  }
+  # lifecycle {
+  #   ignore_changes  = all
+  #   prevent_destroy = true
+  # }
 }

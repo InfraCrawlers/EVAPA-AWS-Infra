@@ -20,6 +20,34 @@ resource "aws_iam_policy" "openvas_s3_upload" {
   })
 }
 
+resource "aws_iam_role_policy" "ssm_s3_access" {
+  name = "${var.project_name}-ssm-s3-access"
+  role = aws_iam_role.ssm_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "${aws_s3_bucket.ssm_ansible_bucket.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = aws_s3_bucket.ssm_ansible_bucket.arn
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role" "lambda_role" {
   name = "openvas-lambda-role"
 
@@ -87,6 +115,11 @@ resource "aws_iam_role" "ssm_role" {
 resource "aws_iam_role_policy_attachment" "ssm_core" {
   role       = aws_iam_role.ssm_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_full_access" {
+  role       = aws_iam_role.ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMFullAccess"
 }
 
 # Attach the new S3 policy to the existing role

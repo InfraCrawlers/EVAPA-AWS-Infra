@@ -1,16 +1,69 @@
 #!/bin/bash
 
-# Route all output to a log file so you can watch the installation process
+# Route logs
 exec > >(tee /var/log/user-data-openvas-docker.log|logger -t user-data -s 2>/dev/console) 2>&1
 
 echo "Starting system bootstrap for Greenbone (Docker)..."
 
-# 1. Update packages and install Ansible and prerequisites
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -y
-apt-get install -y python3 python3-pip software-properties-common curl git ansible
 
-# 2. Generate the Ansible Playbook via heredoc
+# -------------------------------
+# STEP 1: Base dependencies
+# -------------------------------
+apt-get update -y
+apt-get install -y python3 python3-pip software-properties-common curl git unzip
+
+# Wait for network stability (IMPORTANT)
+sleep 30
+
+# -------------------------------
+# STEP 2: Python + Ansible setup
+# -------------------------------
+python3 -m pip install --upgrade pip
+
+# Install everything system-wide (no user/local conflicts)
+python3 -m pip install --break-system-packages \
+  ansible \
+  boto3 \
+  botocore
+
+# -------------------------------
+# STEP 3: Install AWS CLI v2
+# -------------------------------
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+./aws/install
+
+# Fix PATH (CRITICAL)
+export PATH=/usr/local/bin:$PATH
+
+# -------------------------------
+# STEP 4: Install Session Manager Plugin
+# -------------------------------
+curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb"
+dpkg -i session-manager-plugin.deb
+
+# -------------------------------
+# STEP 5: Install Ansible AWS Collection
+# -------------------------------
+ansible-galaxy collection install amazon.aws
+
+# -------------------------------
+# STEP 6: VALIDATION (VERY IMPORTANT)
+# -------------------------------
+echo "Validating environment..."
+
+python3 -c "import boto3; import botocore; print('BOTO3 OK')" || exit 1
+aws --version || exit 1
+aws sts get-caller-identity || exit 1
+session-manager-plugin --version || exit 1
+ansible --version || exit 1
+
+echo "Environment validation complete."
+
+# -------------------------------
+# STEP 7: Generate Ansible Playbook
+# -------------------------------
 cat << 'EOF' > /root/install_openvas_docker.yml
 ---
 - name: Install Greenbone (OpenVAS) via Docker on Ubuntu
@@ -19,7 +72,7 @@ cat << 'EOF' > /root/install_openvas_docker.yml
   become: yes
   vars:
     gvm_install_dir: "/opt/greenbone-community-container"
-    gvm_compose_url: "https://greenbone.github.io/docs/latest/_static/docker-compose-22.4.yml"
+    gvm_compose_url: "https://greenbone.github.io/docs/latest/_static/compose.yaml"
 
   tasks:
     - name: Install prerequisite packages for Docker
@@ -104,8 +157,10 @@ cat << 'EOF' > /root/install_openvas_docker.yml
       delay: 30
 EOF
 
-# 3. Execute the playbook locally
-echo "Running Ansible Playbook to deploy Docker and Greenbone..."
+# -------------------------------
+# STEP 8: Run Playbook
+# -------------------------------
+echo "Running Ansible Playbook..."
 ansible-playbook /root/install_openvas_docker.yml
 
 echo "Provisioning complete! Greenbone containers are running."

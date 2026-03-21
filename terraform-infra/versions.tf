@@ -19,6 +19,16 @@ data "aws_ami" "ubuntu" {
   }
 }
 
+data "aws_ami" "ubuntu2204" {
+  most_recent = true
+  owners      = ["099720109477"]
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+}
+
 # Windows Server 2019 is chosen for the Windows target to provide a modern environment with relevant vulnerabilities
 data "aws_ami" "windows" {
   most_recent = true
