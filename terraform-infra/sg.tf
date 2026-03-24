@@ -32,21 +32,25 @@ resource "aws_security_group" "openvas_sg" {
   name        = "${var.project_name}-openvas-sg"
   description = "SG for OpenVAS Scanner allowing Web UI and Ansible SSH access"
 
-  # Allow native OpenVAS Web UI access
   ingress {
-    from_port   = 9392
-    to_port     = 9392
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Allow SSH access so Ansible can connect and configure the server
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    # Note: For better security, replace 0.0.0.0/0 with your actual local public IP
   }
 
   egress {
@@ -58,6 +62,18 @@ resource "aws_security_group" "openvas_sg" {
 
   tags = {
     Project = var.project_name
+  }
+}
+
+resource "aws_security_group" "lambda_sg" {
+  name   = "openvas-lambda-sg"
+  vpc_id = data.aws_vpc.selected.id
+
+  egress {
+    from_port   = 9390
+    to_port     = 9390
+    protocol    = "tcp"
+    cidr_blocks = [data.aws_vpc.selected.cidr_block]
   }
 }
 

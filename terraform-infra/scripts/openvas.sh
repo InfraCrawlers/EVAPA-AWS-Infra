@@ -25,7 +25,10 @@ python3 -m pip install --upgrade pip
 python3 -m pip install --break-system-packages \
   ansible \
   boto3 \
-  botocore
+  botocore \
+  pyyaml \
+  python-gvm \
+  lxml
 
 # -------------------------------
 # STEP 3: Install AWS CLI v2
@@ -54,6 +57,7 @@ ansible-galaxy collection install amazon.aws
 echo "Validating environment..."
 
 python3 -c "import boto3; import botocore; print('BOTO3 OK')" || exit 1
+python3 -c "import yaml; print('PyYAML OK')" || exit 1
 aws --version || exit 1
 aws sts get-caller-identity || exit 1
 session-manager-plugin --version || exit 1
@@ -73,6 +77,7 @@ cat << 'EOF' > /root/install_openvas_docker.yml
   vars:
     gvm_install_dir: "/opt/greenbone-community-container"
     gvm_compose_url: "https://greenbone.github.io/docs/latest/_static/compose.yaml"
+    sync_script_url: "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/sync_script.py"
 
   tasks:
     - name: Install prerequisite packages for Docker
@@ -130,37 +135,84 @@ cat << 'EOF' > /root/install_openvas_docker.yml
         url: "{{ gvm_compose_url }}"
         dest: "{{ gvm_install_dir }}/docker-compose.yml"
 
-    - name: Modify docker-compose to bind to all external IP addresses
-      replace:
-        path: "{{ gvm_install_dir }}/docker-compose.yml"
-        regexp: '127\.0\.0\.1:9392:80'
-        replace: '0.0.0.0:9392:9392'
+    - name: Dynamically inject Nginx configuration fix into YAML
+      shell: |
+        python3 -c "
+        import yaml
 
-    - name: Pull Greenbone Docker images
-      command: docker compose -f {{ gvm_install_dir }}/docker-compose.yml -p greenbone-community-edition pull
+        with open('docker-compose.yml', 'r') as f:
+            doc = yaml.safe_load(f)
+            
+        # 1. Fix PyYAML boolean conversion bug (Converts False back to 'no')
+        for svc in doc.get('services', {}).values():
+            if 'restart' in svc and isinstance(svc['restart'], bool):
+                svc['restart'] = 'no' if svc['restart'] is False else 'always'
+        
+        # 2. Inject GVM-Config Environment Variables
+        env = doc['services']['gvm-config'].setdefault('environment', {})
+        env['ENABLE_NGINX_CONFIG'] = True
+        env['ENABLE_TLS_GENERATION'] = True
+        env['NGINX_HOST'] = '{{ public_ip }}'
+        env['NGINX_HTTP_PORT'] = 80
+        env['NGINX_ACCESS_CONTROL_ALLOW_ORIGIN_HEADER'] = 'http://{{ public_ip }}'
+        
+        # 3. Override Nginx Port Bindings to standard web ports
+        doc['services']['nginx']['ports'] = ['80:80', '443:443']
+        
+        with open('docker-compose.yml', 'w') as f:
+            yaml.safe_dump(doc, f, default_flow_style=False, sort_keys=False)
+        "
       args:
         chdir: "{{ gvm_install_dir }}"
 
-    - name: Start Greenbone stack (Auto-recovers from SCAP feed sync timeouts)
-      shell: |
-        docker compose -f docker-compose.yml -p greenbone-community-edition up -d
-        if [ $? -ne 0 ]; then
-          echo "Startup failed, likely due to SCAP feed timeout. Tearing down to retry..."
-          docker compose -f docker-compose.yml -p greenbone-community-edition down
-          exit 1
-        fi
+    - name: Pull Greenbone Docker images (with auto-resume for flaky registry)
+      command: docker compose -f {{ gvm_install_dir }}/docker-compose.yml -p greenbone-community-edition pull
+      args:
+        chdir: "{{ gvm_install_dir }}"
+      register: pull_result
+      until: pull_result.rc == 0
+      retries: 15
+      delay: 10
+
+    - name: Start Greenbone stack (Patiently waits for heavy SCAP extraction)
+      command: docker compose -f docker-compose.yml -p greenbone-community-edition up -d
       args:
         chdir: "{{ gvm_install_dir }}"
       register: compose_up
       until: compose_up.rc == 0
-      retries: 10
-      delay: 30
+      retries: 30
+      delay: 60
+
+    # ---------------------------------------------------------
+    # Download Python Script & Setup Cron
+    # ---------------------------------------------------------
+    - name: Create directory for OpenVAS custom scripts
+      file:
+        path: /opt/openvas_scripts
+        state: directory
+        mode: '0755'
+
+    - name: Download S3 Sync script from GitHub
+      get_url:
+        url: "{{ sync_script_url }}"
+        dest: /opt/openvas_scripts/s3_sync.py
+        mode: '0755' # Makes the script executable
+
+    - name: Setup Cron Job to run S3 sync script hourly
+      cron:
+        name: "OpenVAS to S3 Report Sync"
+        minute: "*/5"
+        job: "/usr/bin/python3 /opt/openvas_scripts/s3_sync.py >> /var/log/openvas-s3-sync.log 2>&1"
 EOF
 
 # -------------------------------
-# STEP 8: Run Playbook
+# STEP 8: Run Playbook with Dynamic IP Injection
 # -------------------------------
-echo "Running Ansible Playbook..."
-ansible-playbook /root/install_openvas_docker.yml
+echo "Fetching EC2 Public IP via IMDSv2..."
+TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+PUBLIC_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/public-ipv4)
+
+echo "Running Ansible Playbook for IP: $PUBLIC_IP..."
+ansible-playbook /root/install_openvas_docker.yml -e "public_ip=$PUBLIC_IP"
 
 echo "Provisioning complete! Greenbone containers are running."
