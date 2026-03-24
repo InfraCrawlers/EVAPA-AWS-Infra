@@ -7,7 +7,7 @@ locals {
 }
 
 resource "aws_lambda_function" "openvas_api" {
-  for_each      = toset(["create_port_list", "create_target", "create_task", "start_scan"])
+  for_each      = toset(["create_port_list", "create_target", "create_task", "start_scan", "get_port_lists", "get_targets", "get_tasks"])
   function_name = "openvas_${each.key}"
   role          = aws_iam_role.lambda_exec.arn
   handler       = "${each.key}.lambda_handler"
