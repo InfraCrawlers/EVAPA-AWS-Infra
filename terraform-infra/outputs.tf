@@ -10,3 +10,8 @@ output "ec2_instances" {
     openvas = aws_instance.openvas.id
   }
 }
+
+output "api_base_url" {
+  description = "The base URL for your OpenVAS API"
+  value       = aws_api_gateway_stage.api_stage.invoke_url
+}

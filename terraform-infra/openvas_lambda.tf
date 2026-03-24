@@ -1,13 +1,22 @@
+locals {
+  common_env_vars = {
+    OPENVAS_IP   = aws_instance.openvas.private_ip 
+    GMP_USER     = var.gmp_user
+    GMP_PASSWORD = var.gmp_password
+  }
+}
+
 resource "aws_lambda_function" "openvas_api" {
   for_each      = toset(["create_port_list", "create_target", "create_task", "start_scan"])
   function_name = "openvas_${each.key}"
   role          = aws_iam_role.lambda_exec.arn
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.9"
+  handler       = "${each.key}.lambda_handler"
+  runtime       = "python3.12"
   layers        = [aws_lambda_layer_version.gvm_layer.arn]
   timeout       = 30
 
-  filename      = "${each.key}.zip" 
+  filename      = "./lambda/${each.key}/${each.key}.zip" 
+  source_code_hash = filebase64sha256("./lambda/${each.key}/${each.key}.zip")
 
   vpc_config {
     subnet_ids         = data.aws_subnets.private.ids
@@ -15,7 +24,7 @@ resource "aws_lambda_function" "openvas_api" {
   }
 
   environment {
-    variables = var.common_env_vars
+    variables = local.common_env_vars
   }
 }
 
@@ -38,7 +47,8 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_access" {
 }
 
 resource "aws_lambda_layer_version" "gvm_layer" {
-  filename   = "gvm_layer.zip"
+  filename   = "./packages/gvm_layer.zip"
   layer_name = "python_gvm_library"
-  compatible_runtimes = ["python3.9"]
+  compatible_runtimes = ["python3.12"]
+  source_code_hash    = filebase64sha256("./packages/gvm_layer.zip")
 }

@@ -77,7 +77,7 @@ cat << 'EOF' > /root/install_openvas_docker.yml
   vars:
     gvm_install_dir: "/opt/greenbone-community-container"
     gvm_compose_url: "https://greenbone.github.io/docs/latest/_static/compose.yaml"
-    sync_script_url: "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPOSITORY/main/sync_script.py"
+    sync_script_url: "https://raw.githubusercontent.com/InfraCrawlers/EVAPA-AWS-Infra/refs/heads/patching_ansible/terraform-infra/scripts/auto.py"
 
   tasks:
     - name: Install prerequisite packages for Docker
@@ -135,7 +135,7 @@ cat << 'EOF' > /root/install_openvas_docker.yml
         url: "{{ gvm_compose_url }}"
         dest: "{{ gvm_install_dir }}/docker-compose.yml"
 
-    - name: Dynamically inject Nginx configuration fix into YAML
+    - name: Dynamically inject Nginx configuration fix & gmp-proxy into YAML
       shell: |
         python3 -c "
         import yaml
@@ -158,6 +158,20 @@ cat << 'EOF' > /root/install_openvas_docker.yml
         
         # 3. Override Nginx Port Bindings to standard web ports
         doc['services']['nginx']['ports'] = ['80:80', '443:443']
+
+        # 4. Inject gmp-proxy service for remote API access
+        doc['services']['gmp-proxy'] = {
+            'image': 'alpine:latest',
+            'restart': 'on-failure',
+            'ports': ['9390:9390'],
+            'volumes': ['gvmd_socket_vol:/run/gvmd'],
+            'command': '''sh -c \"apk add --no-cache socat openssl && openssl req -new -x509 -days 3650 -nodes -out /tmp/cert.pem -keyout /tmp/cert.pem -subj '/CN=gvmd' && socat OPENSSL-LISTEN:9390,reuseaddr,fork,cert=/tmp/cert.pem,verify=0 UNIX-CLIENT:/run/gvmd/gvmd.sock\"''',
+            'depends_on': {
+                'gvmd': {
+                    'condition': 'service_started'
+                }
+            }
+        }
         
         with open('docker-compose.yml', 'w') as f:
             yaml.safe_dump(doc, f, default_flow_style=False, sort_keys=False)

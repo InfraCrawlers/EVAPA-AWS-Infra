@@ -14,10 +14,7 @@ provider "aws" {
 }
 
 data "aws_vpc" "selected" {
-  filter {
-    name   = "tag:Name"
-    values = ["vpc-05e41bc3fcd905919"]
-  }
+  id = "vpc-05e41bc3fcd905919"
 }
 
 data "aws_subnets" "private" {

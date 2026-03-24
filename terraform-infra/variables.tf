@@ -13,11 +13,14 @@ variable "key_name" {
   default     = null
 }
 
-variable "common_env_vars" {
-  type = map(string)
-  default = {
-    OPENVAS_IP   = "10.0.x.x"
-    GMP_USER     = "admin"
-    GMP_PASSWORD = "yourpassword"
-  }
+# variables.tf
+variable "gmp_user" {
+  type    = string
+  default = "admin" 
+}
+
+variable "gmp_password" {
+  type      = string
+  default   = "admin"
+  sensitive = true
 }
