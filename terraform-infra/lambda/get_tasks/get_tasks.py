@@ -22,12 +22,15 @@ def get_gmp_connection():
 def lambda_handler(event, context):
     try:
         query_params = event.get('queryStringParameters') or {}
-        search_name = query_params.get('name')
+        # 1. Grab 'id' from the query string instead of 'name'
+        search_id = query_params.get('id')
 
         with get_gmp_connection() as gmp:
-            if search_name:
-                response = gmp.get_tasks(filter_string=f"name='{search_name}'")
+            if search_id:
+                # 2. Use the direct ID lookup method for tasks
+                response = gmp.get_task(task_id=search_id)
             else:
+                # Get all if no ID is provided
                 response = gmp.get_tasks()
 
             tasks = []
@@ -41,7 +44,8 @@ def lambda_handler(event, context):
                     'target_name': target_elem.text if target_elem is not None else 'N/A'
                 }
                 
-                if search_name:
+                # If a specific ID was requested, pull the advanced execution stats
+                if search_id:
                     progress_elem = item.find('progress')
                     report_count_elem = item.find('report_count')
                     scanner_elem = item.find('scanner/name')

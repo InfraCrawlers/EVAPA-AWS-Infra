@@ -22,12 +22,15 @@ def get_gmp_connection():
 def lambda_handler(event, context):
     try:
         query_params = event.get('queryStringParameters') or {}
-        search_name = query_params.get('name')
+        # 1. Grab 'id' from the query string instead of 'name'
+        search_id = query_params.get('id')
 
         with get_gmp_connection() as gmp:
-            if search_name:
-                response = gmp.get_port_lists(filter_string=f"name='{search_name}'")
+            if search_id:
+                # 2. Use the direct ID lookup method
+                response = gmp.get_port_list(port_list_id=search_id)
             else:
+                # Get all if no ID is provided
                 response = gmp.get_port_lists()
 
             port_lists = []
@@ -38,7 +41,8 @@ def lambda_handler(event, context):
                     'port_count': item.find('port_count').text if item.find('port_count') is not None else '0'
                 }
                 
-                if search_name:
+                # If a specific ID was requested, pull the exact port ranges
+                if search_id:
                     ranges = []
                     for pr in item.xpath('port_ranges/port_range'):
                         ranges.append(pr.text if pr.text else '')

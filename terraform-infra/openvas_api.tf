@@ -73,7 +73,8 @@ resource "aws_api_gateway_deployment" "api_deployment" {
   # CRITICAL UPDATE: This forces Terraform to push a new snapshot to your Stage 
   # whenever you add or change an endpoint in your locals block.
   triggers = {
-    redeployment = sha1(jsonencode(aws_api_gateway_integration.api_integrations))
+    redeployment = sha1(jsonencode([aws_api_gateway_integration.api_integrations,
+    aws_api_gateway_integration.start_scan_integration.id]))
   }
 
   lifecycle {
@@ -86,4 +87,41 @@ resource "aws_api_gateway_stage" "api_stage" {
   deployment_id = aws_api_gateway_deployment.api_deployment.id
   rest_api_id   = aws_api_gateway_rest_api.openvas_gw.id
   stage_name    = "v1"
+}
+
+# ==========================================
+# /tasks/{task_id}/start Route
+# ==========================================
+
+# 1. Create the /{task_id} path under the existing /tasks resource
+resource "aws_api_gateway_resource" "task_id" {
+  rest_api_id = aws_api_gateway_rest_api.openvas_gw.id
+  # This dynamically links to the "tasks" resource created by your loop
+  parent_id   = aws_api_gateway_resource.api_routes["tasks"].id 
+  path_part   = "{task_id}"
+}
+
+# 2. Create the /start path under /{task_id}
+resource "aws_api_gateway_resource" "start_scan" {
+  rest_api_id = aws_api_gateway_rest_api.openvas_gw.id
+  parent_id   = aws_api_gateway_resource.task_id.id
+  path_part   = "start"
+}
+
+# 3. Attach the POST method
+resource "aws_api_gateway_method" "post_start_scan" {
+  rest_api_id   = aws_api_gateway_rest_api.openvas_gw.id
+  resource_id   = aws_api_gateway_resource.start_scan.id
+  http_method   = "POST"
+  authorization = "NONE"
+}
+
+# 4. Integrate it with your "start_scan" Lambda
+resource "aws_api_gateway_integration" "start_scan_integration" {
+  rest_api_id             = aws_api_gateway_rest_api.openvas_gw.id
+  resource_id             = aws_api_gateway_resource.start_scan.id
+  http_method             = aws_api_gateway_method.post_start_scan.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.openvas_api["start_scan"].invoke_arn
 }

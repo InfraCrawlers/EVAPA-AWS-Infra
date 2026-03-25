@@ -5,6 +5,7 @@ from gvm.connections import TLSConnection
 from gvm.protocols.gmp import Gmp
 from gvm.transforms import EtreeTransform
 from gvm.errors import GvmError
+from gvm.protocols.enums import AliveTest # <-- Added this import
 
 @contextmanager
 def get_gmp_connection():
@@ -34,6 +35,18 @@ def lambda_handler(event, context):
         name = body.get('name')
         hosts = body.get('hosts')
         port_list_name = body.get('port_list_name') # Now takes a name!
+        
+        # SMART DEFAULT: Set Alive Test to "Consider Alive" if not provided
+        alive_test_input = body.get('alive_test', 'Consider Alive')
+        
+        # Map the string input to the python-gvm Enum
+        if alive_test_input == 'Consider Alive':
+            alive_test_enum = AliveTest.CONSIDER_ALIVE
+        elif alive_test_input == 'Scan Config Default':
+            alive_test_enum = AliveTest.SCAN_CONFIG_DEFAULT
+        else:
+            # Fallback just in case
+            alive_test_enum = AliveTest.CONSIDER_ALIVE 
 
         if not all([name, hosts, port_list_name]):
             return {'statusCode': 400, 'body': json.dumps({'error': 'Missing name, hosts, or port_list_name'})}
@@ -45,7 +58,8 @@ def lambda_handler(event, context):
             response = gmp.create_target(
                 name=name,
                 hosts=hosts,
-                port_list_id=port_list_id
+                port_list_id=port_list_id,
+                alive_tests=alive_test_enum # <-- Parameter injected here
             )
             target_id = response.get('id')
             

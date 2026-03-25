@@ -20,12 +20,21 @@ def get_gmp_connection():
         gmp.authenticate(gmp_user, gmp_password)
         yield gmp
 
+# UPDATED HELPER: Native Python matching to bypass OpenVAS filter bugs
 def get_task_id_by_name(gmp, name):
-    res = gmp.get_tasks(filter_string=f"name='{name}'")
+    # Ask for all tasks without using server-side filters
+    res = gmp.get_tasks()
+    
+    # Handle the XML parsing 
     elements = res.xpath('task') if hasattr(res, 'xpath') else res.findall('task')
-    if not elements:
-        raise ValueError(f"Could not find a task named '{name}'")
-    return elements[0].get('id')
+    
+    # Loop through the results and match the name exactly
+    for elem in elements:
+        elem_name = elem.find('name')
+        if elem_name is not None and elem_name.text == name:
+            return elem.get('id')
+            
+    raise ValueError(f"Could not find a task named '{name}'")
 
 def lambda_handler(event, context):
     try:
@@ -39,12 +48,20 @@ def lambda_handler(event, context):
         task_name = urllib.parse.unquote(raw_task_name)
 
         with get_gmp_connection() as gmp:
-            # Resolve the name to the ID
+            # Resolve the name to the ID using our bulletproof python-side filter
             task_id = get_task_id_by_name(gmp, task_name)
             
             # Start the scan using the resolved ID
             response = gmp.start_task(task_id)
-            report_id = response.get('id')
+            
+            # Extract the report_id generated for this specific scan run
+            report_id = None
+            if hasattr(response, 'xpath'):
+                report_elem = response.xpath('report_id')
+                if report_elem:
+                     report_id = report_elem[0].text
+            elif isinstance(response, dict):
+                report_id = response.get('id')
             
         return {
             'statusCode': 200,

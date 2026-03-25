@@ -22,12 +22,15 @@ def get_gmp_connection():
 def lambda_handler(event, context):
     try:
         query_params = event.get('queryStringParameters') or {}
-        search_name = query_params.get('name')
+        # 1. Grab 'id' from the query string instead of 'name'
+        search_id = query_params.get('id')
 
         with get_gmp_connection() as gmp:
-            if search_name:
-                response = gmp.get_targets(filter_string=f"name='{search_name}'")
+            if search_id:
+                # 2. Use the direct ID lookup method for targets
+                response = gmp.get_target(target_id=search_id)
             else:
+                # Get all if no ID is provided
                 response = gmp.get_targets()
 
             targets = []
@@ -40,7 +43,8 @@ def lambda_handler(event, context):
                     'port_list_name': port_list_elem.text if port_list_elem is not None else 'N/A'
                 }
                 
-                if search_name:
+                # If a specific ID was requested, pull the advanced host details
+                if search_id:
                     data['hosts'] = item.find('hosts').text if item.find('hosts') is not None else ''
                     data['exclude_hosts'] = item.find('exclude_hosts').text if item.find('exclude_hosts') is not None else ''
                     data['max_hosts'] = item.find('max_hosts').text if item.find('max_hosts') is not None else '1'
