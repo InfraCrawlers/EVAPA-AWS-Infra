@@ -1,6 +1,6 @@
 locals {
   common_env_vars = {
-    OPENVAS_IP   = aws_instance.openvas.private_ip 
+    OPENVAS_IP   = aws_instance.openvas.private_ip
     GMP_USER     = var.gmp_user
     GMP_PASSWORD = var.gmp_password
   }
@@ -15,7 +15,7 @@ resource "aws_lambda_function" "openvas_api" {
   layers        = [aws_lambda_layer_version.gvm_layer.arn]
   timeout       = 30
 
-  filename      = "./lambda/${each.key}/${each.key}.zip" 
+  filename         = "./lambda/${each.key}/${each.key}.zip"
   source_code_hash = filebase64sha256("./lambda/${each.key}/${each.key}.zip")
 
   vpc_config {
@@ -34,8 +34,8 @@ resource "aws_iam_role" "lambda_exec" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
@@ -47,8 +47,8 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_access" {
 }
 
 resource "aws_lambda_layer_version" "gvm_layer" {
-  filename   = "./packages/gvm_layer.zip"
-  layer_name = "python_gvm_library"
+  filename            = "./packages/gvm_layer.zip"
+  layer_name          = "python_gvm_library"
   compatible_runtimes = ["python3.12"]
   source_code_hash    = filebase64sha256("./packages/gvm_layer.zip")
 }

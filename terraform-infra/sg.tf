@@ -53,10 +53,10 @@ resource "aws_security_group" "openvas_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-    ingress {
-    from_port   = 9390
-    to_port     = 9390
-    protocol    = "tcp"
+  ingress {
+    from_port       = 9390
+    to_port         = 9390
+    protocol        = "tcp"
     security_groups = [aws_security_group.lambda_sg.id]
   }
 

@@ -1,16 +1,16 @@
 data "archive_file" "lambda_zip" {
-  type        = "zip"
+  type = "zip"
   # Point this to the folder containing your index.mjs
-  source_dir  = "${path.module}/lambda/dynamodb_api/" 
-  
+  source_dir = "${path.module}/lambda/dynamodb_api/"
+
   # Output the zip to the root of your terraform module
-  output_path = "${path.module}/lambda/dynamodb_api/dynamodb_read_payload.zip" 
+  output_path = "${path.module}/lambda/dynamodb_api/dynamodb_read_payload.zip"
 }
 
 resource "aws_lambda_function" "dynamodb_read" {
   function_name = "dynamodb-read"
   runtime       = "nodejs20.x"
-  handler       = "index.handler" 
+  handler       = "index.handler"
   role          = aws_iam_role.lambda_role.arn
 
   # Point these directly to the output of the archive_file data source

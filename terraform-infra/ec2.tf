@@ -44,8 +44,7 @@ resource "aws_instance" "windows" {
   iam_instance_profile   = aws_iam_instance_profile.ssm_profile.name
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
   key_name               = var.key_name
-  user_data              = file("${path.module}/scripts/windows.ps1")
-
+  user_data_base64       = filebase64("${path.module}/scripts/windows.ps1")
   tags = {
     Name             = "Windows-Vuln-Target"
     OS               = "Windows2019"

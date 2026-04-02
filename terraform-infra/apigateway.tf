@@ -13,9 +13,9 @@ resource "aws_apigatewayv2_integration" "lambda_integration" {
   api_id           = aws_apigatewayv2_api.openvas_api.id
   integration_type = "AWS_PROXY"
   integration_uri  = aws_lambda_function.dynamodb_read.invoke_arn
-  
+
   # For HTTP APIs, this is recommended:
-  integration_method = "POST" 
+  integration_method = "POST"
 }
 
 resource "aws_apigatewayv2_route" "get_findings" {

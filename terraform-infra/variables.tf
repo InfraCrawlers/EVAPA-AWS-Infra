@@ -16,7 +16,7 @@ variable "key_name" {
 # variables.tf
 variable "gmp_user" {
   type    = string
-  default = "admin" 
+  default = "admin"
 }
 
 variable "gmp_password" {

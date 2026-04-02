@@ -1,5 +1,5 @@
 - name: Setup Vulnerable Applications Lab
-  hosts: vulnerable
+  hosts: linux
   become: yes
 
   vars:
