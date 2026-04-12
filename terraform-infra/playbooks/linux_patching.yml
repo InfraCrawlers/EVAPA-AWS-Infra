@@ -1,0 +1,197 @@
+- name: Setup Vulnerable Applications Lab
+  hosts: linux
+  become: yes
+
+  vars:
+    workdir: /opt/vulnapps
+
+  tasks:
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install required packages
+      apt:
+        name:
+          - build-essential
+          - wget
+          - curl
+          - unzip
+          - git
+          - libssl-dev
+          - libxml2-dev
+          - libpcre3-dev
+          - zlib1g-dev
+          - libncurses5-dev
+          - openjdk-8-jdk
+          - php
+          - php-mysql
+          - mysql-server
+          - apache2
+          - libreadline-dev
+          - libcap-dev
+          - net-tools
+        state: present
+
+    - name: Create working directory
+      file:
+        path: "{{ workdir }}"
+        state: directory
+        mode: '0755'
+
+    # ---------------------------
+    # ProFTPD
+    # ---------------------------
+    - name: Download ProFTPD
+      get_url:
+        url: https://github.com/proftpd/proftpd/archive/refs/tags/v1.3.5e.tar.gz
+        dest: "{{ workdir }}/proftpd.tar.gz"
+
+    - name: Extract ProFTPD
+      unarchive:
+        src: "{{ workdir }}/proftpd.tar.gz"
+        dest: "{{ workdir }}"
+        remote_src: yes
+
+    - name: Build ProFTPD
+      shell: |
+        cd {{ workdir }}/proftpd-1.3.5e
+        ./configure --prefix={{ workdir }}/proftpd CFLAGS="-fcommon"
+        make -j$(nproc)
+        make install
+
+    # ---------------------------
+    # Struts
+    # ---------------------------
+    - name: Download Struts
+      get_url:
+        url: https://archive.apache.org/dist/struts/2.3.20.1/struts-2.3.20.1-all.zip
+        dest: "{{ workdir }}/struts.zip"
+
+    - name: Extract Struts
+      unarchive:
+        src: "{{ workdir }}/struts.zip"
+        dest: "{{ workdir }}"
+        remote_src: yes
+
+    - name: Ensure struts directory exists
+      file:
+        path: "{{ workdir }}/struts"
+        state: directory
+
+    - name: Rename Struts directory
+      command: mv {{ workdir }}/struts-2.3.20.1 {{ workdir }}/struts
+      args:
+        creates: "{{ workdir }}/struts"
+
+    # ---------------------------
+    # Tomcat
+    # ---------------------------
+    - name: Download Tomcat
+      get_url:
+        url: https://archive.apache.org/dist/tomcat/tomcat-8/v8.5.15/bin/apache-tomcat-8.5.15.tar.gz
+        dest: "{{ workdir }}/tomcat.tar.gz"
+
+    - name: Extract Tomcat
+      unarchive:
+        src: "{{ workdir }}/tomcat.tar.gz"
+        dest: "{{ workdir }}"
+        remote_src: yes
+
+    - name: Rename Tomcat
+      command: mv {{ workdir }}/apache-tomcat-8.5.15 {{ workdir }}/tomcat
+
+    # ---------------------------
+    # Drupal
+    # ---------------------------
+    - name: Download Drupal
+      get_url:
+        url: https://ftp.drupal.org/files/projects/drupal-7.31.tar.gz
+        dest: "{{ workdir }}/drupal.tar.gz"
+
+    - name: Extract Drupal
+      unarchive:
+        src: "{{ workdir }}/drupal.tar.gz"
+        dest: "{{ workdir }}"
+        remote_src: yes
+
+    - name: Move Drupal to web root
+      command: mv {{ workdir }}/drupal-7.31 /var/www/html/drupal
+
+    - name: Set Drupal permissions
+      file:
+        path: /var/www/html/drupal
+        owner: www-data
+        group: www-data
+        recurse: yes
+
+    # ---------------------------
+    # WordPress
+    # ---------------------------
+    - name: Download WordPress
+      get_url:
+        url: https://wordpress.org/wordpress-4.7.1.tar.gz
+        dest: "{{ workdir }}/wordpress.tar.gz"
+
+    - name: Extract WordPress
+      unarchive:
+        src: "{{ workdir }}/wordpress.tar.gz"
+        dest: "{{ workdir }}"
+        remote_src: yes
+
+    - name: Move WordPress
+      command: mv {{ workdir }}/wordpress /var/www/html/wordpress
+
+    - name: Set WordPress permissions
+      file:
+        path: /var/www/html/wordpress
+        owner: www-data
+        group: www-data
+        recurse: yes
+
+    # ---------------------------
+    # Elasticsearch
+    # ---------------------------
+    - name: Download Elasticsearch
+      get_url:
+        url: https://download.elastic.co/elasticsearch/elasticsearch/elasticsearch-1.1.1.tar.gz
+        dest: "{{ workdir }}/es.tar.gz"
+
+    - name: Extract Elasticsearch
+      unarchive:
+        src: "{{ workdir }}/es.tar.gz"
+        dest: "{{ workdir }}"
+        remote_src: yes
+
+    - name: Rename Elasticsearch
+      command: mv {{ workdir }}/elasticsearch-1.1.1 {{ workdir }}/elasticsearch
+
+    - name: Configure Elasticsearch network
+      lineinfile:
+        path: "{{ workdir }}/elasticsearch/config/elasticsearch.yml"
+        line: "network.host: 0.0.0.0"
+        create: yes
+
+    # ---------------------------
+    # Services
+    # ---------------------------
+    - name: Start MySQL
+      service:
+        name: mysql
+        state: started
+
+    - name: Create databases
+      shell: |
+        mysql -e "CREATE DATABASE IF NOT EXISTS wordpress;"
+        mysql -e "CREATE DATABASE IF NOT EXISTS drupal;"
+        mysql -e "CREATE USER IF NOT EXISTS 'labuser'@'localhost' IDENTIFIED BY 'password123';"
+        mysql -e "GRANT ALL PRIVILEGES ON *.* TO 'labuser'@'localhost'; FLUSH PRIVILEGES;"
+
+    - name: Start Tomcat
+      shell: "{{ workdir }}/tomcat/bin/startup.sh"
+      ignore_errors: yes
+
+    - name: Start Elasticsearch
+      shell: "{{ workdir }}/elasticsearch/bin/elasticsearch -d"
+      ignore_errors: yes

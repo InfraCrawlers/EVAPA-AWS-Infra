@@ -1,0 +1,102 @@
+---
+- name: Remediation Playbook for Vulnerable Windows EC2 (No Tomcat)
+  hosts: windows
+  gather_facts: yes
+
+  vars:
+    work_dir: "C:\\vulnapps"
+    download_dir: "C:\\vulnapps\\downloads"
+    es_zip: "{{ download_dir }}\\es_patched.zip"
+
+    # Modern, secure version of Elasticsearch
+    es_url: "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-7.17.10-windows-x86_64.zip"
+
+    es_extract_root: "{{ work_dir }}\\elasticsearch"
+    es_actual_dir: "{{ es_extract_root }}\\elasticsearch-7.17.10"
+
+  tasks:
+    # ==========================================
+    # PHASE 1: OS HARDENING & WINRM BUG FIXES
+    # ==========================================
+    - name: Ensure working directories exist
+      ansible.windows.win_file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ work_dir }}"
+        - "{{ download_dir }}"
+
+    - name: Re-enable Windows Updates in Registry
+      ansible.windows.win_regedit:
+        path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU
+        name: NoAutoUpdate
+        data: 0
+        type: dword
+        state: present
+
+    - name: Ensure Windows Update service is running
+      ansible.windows.win_service:
+        name: wuauserv
+        start_mode: auto
+        state: started
+
+    - name: Prevent WinRM profile unload (Fixes 0x800703FA COM error)
+      ansible.windows.win_regedit:
+        path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList
+        name: DisableForceUnload
+        data: 1
+        type: dword
+        state: present
+
+    - name: "RECOVERY: Wait for SSM Agent to stabilize after OS changes"
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+        delay: 5
+
+    # ==========================================
+    # PHASE 2: SILENT TEARDOWN OF VULNERABLE ES
+    # ==========================================
+    - name: Force Kill Running Java/ES Processes (Silenced)
+      ansible.windows.win_shell: |
+        Get-Process -Name "java" -ErrorAction SilentlyContinue | Stop-Process -Force
+      failed_when: false
+
+    - name: "RECOVERY: Wait for connection and allow kernel to release file locks"
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+        delay: 5
+
+    - name: Wipe the old vulnerable Elasticsearch directory
+      ansible.windows.win_file:
+        path: "{{ es_extract_root }}"
+        state: absent
+      failed_when: false
+
+    # ==========================================
+    # PHASE 3: DEPLOYMENT OF SECURE ES
+    # ==========================================
+    - name: Download patched Elasticsearch 7
+      ansible.windows.win_get_url:
+        url: "{{ es_url }}"
+        dest: "{{ es_zip }}"
+
+    - name: Extract patched Elasticsearch 7
+      community.windows.win_unzip:
+        src: "{{ es_zip }}"
+        dest: "{{ es_extract_root }}"
+        delete_archive: yes
+
+    # ==========================================
+    # PHASE 4: OS PATCHING & FINALIZATION
+    # ==========================================
+    - name: Reboot instance to initialize Windows Update Agent cleanly
+      ansible.windows.win_reboot:
+        reboot_timeout: 600
+
+    - name: Install Windows security and critical updates
+      ansible.windows.win_updates:
+        category_names:
+          - SecurityUpdates
+          - CriticalUpdates
+        state: installed
+        reboot: yes
