@@ -249,54 +249,704 @@ Outputs:
 
 ### OpenVAS control Lambdas (Python)
 
-All functions connect to OpenVAS GMP over TLS on port 9390 and authenticate with environment credentials.
+All OpenVAS control Lambdas follow a similar structure: imports, shared GMP connection helper, request parsing, one GMP action, and API Gateway-style JSON response.
 
-1. `create_port_list.py`
-	 - Expects JSON body with `name` and `port_range`.
-	 - Creates a custom OpenVAS port list.
-	 - Returns new `port_list_id`.
+### 5.1 lambda/create_port_list/create_port_list.py
 
-2. `create_target.py`
-	 - Expects `name`, `hosts`, `port_list_name`, optional `alive_test`.
-	 - Resolves port list name to ID.
-	 - Handles AliveTest enum compatibility across python-gvm versions.
-	 - Creates OpenVAS target and returns `target_id`.
+```python
+import os
+import json
+from contextlib import contextmanager
+from gvm.connections import TLSConnection
+from gvm.protocols.gmp import Gmp
+from gvm.transforms import EtreeTransform
+from gvm.errors import GvmError
 
-3. `create_task.py`
-	 - Expects `name`, `target_name`.
-	 - Optional defaults:
-		 - scan config: `Full and fast`
-		 - scanner: `OpenVAS Default`
-	 - Resolves names to IDs and creates task.
+@contextmanager
+def get_gmp_connection():
+	openvas_ip = os.environ['OPENVAS_IP']
+	gmp_user = os.environ['GMP_USER']
+	gmp_password = os.environ['GMP_PASSWORD']
+    
+	connection = TLSConnection(hostname=openvas_ip, port=9390)
+	transform = EtreeTransform()
+    
+	with Gmp(connection=connection, transform=transform) as gmp:
+		gmp.authenticate(gmp_user, gmp_password)
+		yield gmp
 
-4. `start_scan.py`
-	 - Reads `task_id` from path parameter, but treats it as task name.
-	 - Resolves task name to real task UUID.
-	 - Starts scan and returns `report_id` when available.
+def lambda_handler(event, context):
+	try:
+		body = json.loads(event.get('body', '{}'))
+		name = body.get('name')
+		port_range = body.get('port_range')
 
-5. `get_port_lists.py`
-	 - `GET` list endpoint.
-	 - Supports `?id=<uuid>` to fetch specific port list details.
+		if not name or not port_range:
+			return {'statusCode': 400, 'body': json.dumps({'error': 'Missing name or port_range'})}
 
-6. `get_targets.py`
-	 - `GET` list endpoint.
-	 - Supports `?id=<uuid>` for detailed target fields.
+		with get_gmp_connection() as gmp:
+			response = gmp.create_port_list(name=name, port_range=port_range)
+			port_list_id = response.get('id')
+            
+		return {
+			'statusCode': 200,
+			'body': json.dumps({'port_list_id': port_list_id})
+		}
+	except GvmError as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+	except Exception as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal server error', 'details': str(e)})}
+```
 
-7. `get_tasks.py`
-	 - `GET` list endpoint for tasks and status/progress metadata.
-	 - Current file includes unresolved merge conflict markers and should be repaired before reliable deployment.
+Explanation :
+
+- Reads OpenVAS connection credentials from environment variables.
+- Opens a TLS GMP session on port 9390 and authenticates before use.
+- Expects `name` and `port_range` in request body.
+- Returns HTTP 400 if required inputs are missing.
+- Calls `gmp.create_port_list(...)` and returns generated `port_list_id`.
+- Separately handles GVM-specific errors and unexpected runtime errors.
+
+### 5.2 lambda/create_target/create_target.py
+
+```python
+import os
+import json
+import enum
+from contextlib import contextmanager
+from gvm.connections import TLSConnection
+from gvm.protocols.gmp import Gmp
+from gvm.transforms import EtreeTransform
+from gvm.errors import GvmError
+
+# The Ultimate Bulletproof AliveTest Import
+# Greenbone aggressively moves this Enum between GMP version files.
+# We try the specific version modules, and if all else fails, 
+# we build a perfect mock Enum that bypasses their strict type-check.
+try:
+	from gvm.protocols.gmpv224 import AliveTest
+except ImportError:
+	try:
+		from gvm.protocols.gmpv225 import AliveTest
+	except ImportError:
+		try:
+			from gvm.protocols.gmpv226 import AliveTest
+		except ImportError:
+			class AliveTest(enum.Enum):
+				CONSIDER_ALIVE = "Consider Alive"
+				SCAN_CONFIG_DEFAULT = "Scan Config Default"
+
+@contextmanager
+def get_gmp_connection():
+	openvas_ip = os.environ['OPENVAS_IP']
+	gmp_user = os.environ['GMP_USER']
+	gmp_password = os.environ['GMP_PASSWORD']
+    
+	connection = TLSConnection(hostname=openvas_ip, port=9390)
+	transform = EtreeTransform()
+    
+	with Gmp(connection=connection, transform=transform) as gmp:
+		gmp.authenticate(gmp_user, gmp_password)
+		yield gmp
+
+# Helper to find an ID by Name
+def get_id_by_name(gmp, entity_type, name):
+	res = gmp.get_port_lists(filter_string=f"name='{name}'")
+	# Handle both lxml (xpath) and standard xml (findall)
+	elements = res.xpath('port_list') if hasattr(res, 'xpath') else res.findall('port_list')
+	if not elements:
+		raise ValueError(f"Could not find a {entity_type} named '{name}'")
+	return elements[0].get('id')
+
+def lambda_handler(event, context):
+	try:
+		body = json.loads(event.get('body', '{}'))
+		name = body.get('name')
+		hosts = body.get('hosts')
+		port_list_name = body.get('port_list_name') 
+        
+		# Parse the string into the specific Enum object python-gvm demands
+		alive_test_input = body.get('alive_test', 'Consider Alive')
+        
+		if alive_test_input == 'Consider Alive':
+			enum_val = AliveTest.CONSIDER_ALIVE
+		elif alive_test_input == 'Scan Config Default':
+			enum_val = AliveTest.SCAN_CONFIG_DEFAULT
+		else:
+			enum_val = AliveTest.CONSIDER_ALIVE
+
+		if not all([name, hosts, port_list_name]):
+			return {'statusCode': 400, 'body': json.dumps({'error': 'Missing name, hosts, or port_list_name'})}
+
+		with get_gmp_connection() as gmp:
+			# Resolve the name to an ID first
+			port_list_id = get_id_by_name(gmp, 'port_list', port_list_name)
+            
+			# Pass the precise Enum object (whether real or mocked)
+			response = gmp.create_target(
+				name=name,
+				hosts=hosts,
+				port_list_id=port_list_id,
+				alive_test=enum_val 
+			)
+			target_id = response.get('id')
+            
+		return {
+			'statusCode': 200,
+			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+			'body': json.dumps({'message': 'Target created', 'target_id': target_id})
+		}
+	except ValueError as ve:
+		return {'statusCode': 404, 'body': json.dumps({'error': str(ve)})}
+	except GvmError as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+	except Exception as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal server error', 'details': str(e)})}
+```
+
+Explanation :
+
+- Uses compatibility imports for `AliveTest` across multiple python-gvm protocol versions.
+- Includes fallback enum definition if none of the versioned imports exist.
+- Resolves `port_list_name` to a real OpenVAS UUID before creating target.
+- Supports `alive_test` input with sane defaults.
+- Requires `name`, `hosts`, and `port_list_name`.
+- Returns CORS-enabled JSON response for browser clients.
+
+### 5.3 lambda/create_task/create_task.py
+
+```python
+import os
+import json
+from contextlib import contextmanager
+from gvm.connections import TLSConnection
+from gvm.protocols.gmp import Gmp
+from gvm.transforms import EtreeTransform
+from gvm.errors import GvmError
+
+@contextmanager
+def get_gmp_connection():
+	openvas_ip = os.environ['OPENVAS_IP']
+	gmp_user = os.environ['GMP_USER']
+	gmp_password = os.environ['GMP_PASSWORD']
+    
+	connection = TLSConnection(hostname=openvas_ip, port=9390)
+	transform = EtreeTransform()
+    
+	with Gmp(connection=connection, transform=transform) as gmp:
+		gmp.authenticate(gmp_user, gmp_password)
+		yield gmp
+
+# Updated Helper to find IDs by Name natively in Python
+def get_id_by_name(gmp, entity_type, name):
+	# Ask for all items without using server-side filters
+	if entity_type == 'target':
+		res = gmp.get_targets()
+	elif entity_type == 'config':
+		res = gmp.get_scan_configs()
+	elif entity_type == 'scanner':
+		res = gmp.get_scanners()
+        
+	elements = res.xpath(entity_type) if hasattr(res, 'xpath') else res.findall(entity_type)
+    
+	# Loop through the results and match the name exactly
+	for elem in elements:
+		elem_name = elem.find('name')
+		if elem_name is not None and elem_name.text == name:
+			return elem.get('id')
+            
+	raise ValueError(f"Could not find a {entity_type} named '{name}'")
+
+def lambda_handler(event, context):
+	try:
+		body = json.loads(event.get('body', '{}'))
+		name = body.get('name')
+		target_name = body.get('target_name')
+        
+		# Smart Defaults - if frontend doesn't provide these, use the standards
+		config_name = body.get('config_name', 'Full and fast')
+		scanner_name = body.get('scanner_name', 'OpenVAS Default')
+
+		if not all([name, target_name]):
+			return {'statusCode': 400, 'body': json.dumps({'error': 'Missing name or target_name'})}
+
+		with get_gmp_connection() as gmp:
+			# Resolve all names to their hidden UUIDs
+			target_id = get_id_by_name(gmp, 'target', target_name)
+			config_id = get_id_by_name(gmp, 'config', config_name)
+			scanner_id = get_id_by_name(gmp, 'scanner', scanner_name)
+
+			response = gmp.create_task(
+				name=name,
+				target_id=target_id,
+				config_id=config_id,
+				scanner_id=scanner_id
+			)
+			task_id = response.get('id')
+            
+		return {
+			'statusCode': 200,
+			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+			'body': json.dumps({'message': 'Task created', 'task_id': task_id})
+		}
+	except ValueError as ve:
+		return {'statusCode': 404, 'body': json.dumps({'error': str(ve)})}
+	except GvmError as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+	except Exception as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal server error', 'details': str(e)})}
+```
+
+Explanation :
+
+- Builds tasks using human-readable names from frontend input.
+- Resolves target/config/scanner names to UUIDs in Python logic.
+- Uses defaults for config (`Full and fast`) and scanner (`OpenVAS Default`).
+- Returns 404 when a dependency name is not found.
+- Returns CORS-enabled success payload with `task_id`.
+
+### 5.4 lambda/start_scan/start_scan.py
+
+```python
+import os
+import json
+import urllib.parse
+from contextlib import contextmanager
+from gvm.connections import TLSConnection
+from gvm.protocols.gmp import Gmp
+from gvm.transforms import EtreeTransform
+from gvm.errors import GvmError
+
+@contextmanager
+def get_gmp_connection():
+	openvas_ip = os.environ['OPENVAS_IP']
+	gmp_user = os.environ['GMP_USER']
+	gmp_password = os.environ['GMP_PASSWORD']
+    
+	connection = TLSConnection(hostname=openvas_ip, port=9390)
+	transform = EtreeTransform()
+    
+	with Gmp(connection=connection, transform=transform) as gmp:
+		gmp.authenticate(gmp_user, gmp_password)
+		yield gmp
+
+# UPDATED HELPER: Native Python matching to bypass OpenVAS filter bugs
+def get_task_id_by_name(gmp, name):
+	# Ask for all tasks without using server-side filters
+	res = gmp.get_tasks()
+    
+	# Handle the XML parsing 
+	elements = res.xpath('task') if hasattr(res, 'xpath') else res.findall('task')
+    
+	# Loop through the results and match the name exactly
+	for elem in elements:
+		elem_name = elem.find('name')
+		if elem_name is not None and elem_name.text == name:
+			return elem.get('id')
+            
+	raise ValueError(f"Could not find a task named '{name}'")
+
+def lambda_handler(event, context):
+	try:
+		path_parameters = event.get('pathParameters') or {}
+        
+		# Grab the parameter from the URL and decode spaces/special characters
+		raw_task_name = path_parameters.get('task_id')
+		if not raw_task_name:
+			return {'statusCode': 400, 'body': json.dumps({'error': 'Missing task name in path'})}
+            
+		task_name = urllib.parse.unquote(raw_task_name)
+
+		with get_gmp_connection() as gmp:
+			# Resolve the name to the ID using our bulletproof python-side filter
+			task_id = get_task_id_by_name(gmp, task_name)
+            
+			# Start the scan using the resolved ID
+			response = gmp.start_task(task_id)
+            
+			# Extract the report_id generated for this specific scan run
+			report_id = None
+			if hasattr(response, 'xpath'):
+				report_elem = response.xpath('report_id')
+				if report_elem:
+					 report_id = report_elem[0].text
+			elif isinstance(response, dict):
+				report_id = response.get('id')
+            
+		return {
+			'statusCode': 200,
+			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+			'body': json.dumps({
+				'message': f'Scan "{task_name}" started successfully',
+				'report_id': report_id 
+			})
+		}
+	except ValueError as ve:
+		return {'statusCode': 404, 'body': json.dumps({'error': str(ve)})}
+	except GvmError as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+	except Exception as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal server error', 'details': str(e)})}
+```
+
+Explanation :
+
+- Reads task identifier from API path parameter.
+- Decodes URL-encoded task name values.
+- Resolves task name to true task UUID.
+- Starts scan via `gmp.start_task`.
+- Attempts to extract and return generated `report_id`.
+- Returns 404 if task name cannot be found.
+
+### 5.5 lambda/get_port_lists/get_port_lists.py
+
+```python
+import os
+import json
+from contextlib import contextmanager
+from gvm.connections import TLSConnection
+from gvm.protocols.gmp import Gmp
+from gvm.transforms import EtreeTransform
+from gvm.errors import GvmError
+
+@contextmanager
+def get_gmp_connection():
+	openvas_ip = os.environ['OPENVAS_IP']
+	gmp_user = os.environ['GMP_USER']
+	gmp_password = os.environ['GMP_PASSWORD']
+    
+	connection = TLSConnection(hostname=openvas_ip, port=9390)
+	transform = EtreeTransform()
+    
+	with Gmp(connection=connection, transform=transform) as gmp:
+		gmp.authenticate(gmp_user, gmp_password)
+		yield gmp
+
+def lambda_handler(event, context):
+	try:
+		query_params = event.get('queryStringParameters') or {}
+		# 1. Grab 'id' from the query string instead of 'name'
+		search_id = query_params.get('id')
+
+		with get_gmp_connection() as gmp:
+			if search_id:
+				# 2. Use the direct ID lookup method
+				response = gmp.get_port_list(port_list_id=search_id)
+			else:
+				# Get all if no ID is provided
+				response = gmp.get_port_lists()
+
+			port_lists = []
+			for item in response.xpath('port_list'):
+				data = {
+					'id': item.get('id'),
+					'name': item.find('name').text if item.find('name') is not None else '',
+					'port_count': item.find('port_count').text if item.find('port_count') is not None else '0'
+				}
+                
+				# If a specific ID was requested, pull the exact port ranges
+				if search_id:
+					ranges = []
+					for pr in item.xpath('port_ranges/port_range'):
+						ranges.append(pr.text if pr.text else '')
+					data['port_ranges'] = ranges
+                    
+				port_lists.append(data)
+            
+		return {
+			'statusCode': 200,
+			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+			'body': json.dumps({'port_lists': port_lists})
+		}
+	except GvmError as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+	except Exception as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal error', 'details': str(e)})}
+```
+
+Explanation:
+
+- Supports two modes: list all port lists or fetch one by `id` query string.
+- Always returns normalized JSON structure for frontend usage.
+- Includes optional port ranges only in specific-ID mode.
+- Handles GMP and generic errors with 500 responses.
+
+### 5.6 lambda/get_targets/get_targets.py
+
+```python
+import os
+import json
+from contextlib import contextmanager
+from gvm.connections import TLSConnection
+from gvm.protocols.gmp import Gmp
+from gvm.transforms import EtreeTransform
+from gvm.errors import GvmError
+
+@contextmanager
+def get_gmp_connection():
+	openvas_ip = os.environ['OPENVAS_IP']
+	gmp_user = os.environ['GMP_USER']
+	gmp_password = os.environ['GMP_PASSWORD']
+    
+	connection = TLSConnection(hostname=openvas_ip, port=9390)
+	transform = EtreeTransform()
+    
+	with Gmp(connection=connection, transform=transform) as gmp:
+		gmp.authenticate(gmp_user, gmp_password)
+		yield gmp
+
+def lambda_handler(event, context):
+	try:
+		query_params = event.get('queryStringParameters') or {}
+		# 1. Grab 'id' from the query string instead of 'name'
+		search_id = query_params.get('id')
+
+		with get_gmp_connection() as gmp:
+			if search_id:
+				# 2. Use the direct ID lookup method for targets
+				response = gmp.get_target(target_id=search_id)
+			else:
+				# Get all if no ID is provided
+				response = gmp.get_targets()
+
+			targets = []
+			for item in response.xpath('target'):
+				port_list_elem = item.find('port_list/name')
+                
+				data = {
+					'id': item.get('id'),
+					'name': item.find('name').text if item.find('name') is not None else '',
+					'port_list_name': port_list_elem.text if port_list_elem is not None else 'N/A'
+				}
+                
+				# If a specific ID was requested, pull the advanced host details
+				if search_id:
+					data['hosts'] = item.find('hosts').text if item.find('hosts') is not None else ''
+					data['exclude_hosts'] = item.find('exclude_hosts').text if item.find('exclude_hosts') is not None else ''
+					data['max_hosts'] = item.find('max_hosts').text if item.find('max_hosts') is not None else '1'
+                    
+				targets.append(data)
+            
+		return {
+			'statusCode': 200,
+			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+			'body': json.dumps({'targets': targets})
+		}
+	except GvmError as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+	except Exception as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal error', 'details': str(e)})}
+```
+
+Explanation:
+
+- Supports list-all and get-by-id target retrieval.
+- Returns target ID, name, and port-list display name.
+- Adds host-specific fields only when querying a specific target.
+- Uses consistent response envelope and CORS headers.
+
+### 5.7 lambda/get_tasks/get_tasks.py
+
+```python
+def lambda_handler(event, context):
+	try:
+		query_params = event.get('queryStringParameters') or {}
+		search_id = query_params.get('id')
+
+		with get_gmp_connection() as gmp:
+			if search_id:
+				response = gmp.get_task(task_id=search_id)
+			else:
+				response = gmp.get_tasks()
+
+			tasks = []
+			for item in response.xpath('task'):
+				target_elem = item.find('target/name')
+                
+				# Grab the raw status
+				status = item.find('status').text if item.find('status') is not None else 'Unknown'
+                
+				data = {
+					'id': item.get('id'),
+					'name': item.find('name').text if item.find('name') is not None else '',
+					'status': status,
+					'target_name': target_elem.text if target_elem is not None else 'N/A'
+				}
+                
+				if search_id:
+					progress_elem = item.find('progress')
+					raw_progress = progress_elem.text if progress_elem is not None else '0'
+                    
+					# --- SMART PROGRESS LOGIC ---
+					if status == 'Done':
+						clean_progress = '100'
+					elif status in ['New', 'Requested', 'Queued'] or raw_progress == '-1':
+						clean_progress = '0'
+					else:
+						clean_progress = raw_progress
+                        
+					data['progress'] = clean_progress
+                    
+					report_count_elem = item.find('report_count')
+					scanner_elem = item.find('scanner/name')
+					data['report_count'] = report_count_elem.text if report_count_elem is not None else '0'
+					data['scanner_name'] = scanner_elem.text if scanner_elem is not None else 'N/A'
+
+				tasks.append(data)
+            
+		return {
+			'statusCode': 200,
+			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+			'body': json.dumps({'tasks': tasks})
+		}
+	except GvmError as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+	except Exception as e:
+		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal error', 'details': str(e)})}
+```
+
+Explanation:
+
+- Retrieves all tasks or one task by `id`.
+- Returns task status and target name in all modes.
+- In specific-ID mode, computes normalized progress and includes report/scanner metadata.
+- Converts OpenVAS placeholders like `-1` progress into frontend-friendly values.
+- Note: current file starts directly at `lambda_handler`; imports/helper definitions are not in this file.
 
 ### Parser and Data Lambdas
 
-8. `openvas_parser/openvas_lambda.py`
-	 - Triggered by S3 object creation events.
-	 - Reads XML report.
-	 - Extracts results with severity > 7.0.
-	 - Writes one DynamoDB item per report with vulnerability list and counts.
+### 5.8 lambda/openvas_parser/openvas_lambda.py
 
-9. `dynamodb_api/index.mjs`
-	 - Scans `openvas-scan-findings` and returns JSON data.
-	 - Includes CORS header for frontend/API consumer compatibility.
+```python
+import os
+import json
+import urllib.parse
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from decimal import Decimal
+import boto3
+
+s3 = boto3.client('s3')
+dynamodb = boto3.resource('dynamodb')
+
+TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME', 'openvas-scan-findings')
+table = dynamodb.Table(TABLE_NAME)
+
+def lambda_handler(event, context):
+	for record in event['Records']:
+		bucket = record['s3']['bucket']['name']
+		key = urllib.parse.unquote_plus(record['s3']['object']['key'], encoding='utf-8')
+
+		try:
+			print(f"Fetching {key} from bucket {bucket}")
+			response = s3.get_object(Bucket=bucket, Key=key)
+			xml_content = response['Body'].read()
+
+			root = ET.fromstring(xml_content)
+            
+			high_severity_vulns = []
+
+			for result in root.findall('.//results/result'):
+				severity_text = result.findtext('severity')
+                
+				if severity_text:
+					try:
+						severity_score = float(severity_text)
+                        
+						if severity_score > 7.0:
+							host_elem = result.find('host')
+							host_ip = host_elem.text.strip() if (host_elem is not None and host_elem.text) else 'Unknown'
+                            
+							vuln_data = {
+								'vulnerability_name': result.findtext('name', 'Unknown'),
+								'host': host_ip,
+								'port': result.findtext('port', 'Unknown'),
+								'threat_level': result.findtext('threat', 'Unknown'),
+								'cvss_severity': Decimal(str(severity_score)), 
+								'nvt_oid': result.find('nvt').attrib.get('oid', 'Unknown') if result.find('nvt') is not None else 'Unknown'
+							}
+							high_severity_vulns.append(vuln_data)
+                            
+					except ValueError:
+						continue
+
+
+			if high_severity_vulns:
+				current_time = datetime.utcnow().isoformat()
+                
+				item = {
+					'pk': key, 
+					'sk': 'REPORT_DETAILS',
+					'processed_timestamp': current_time,
+					'total_high_severity_count': len(high_severity_vulns),
+					'vulnerabilities': high_severity_vulns
+				}
+
+				table.put_item(Item=item)
+				print(f"Successfully saved {len(high_severity_vulns)} high severity vulnerabilities for {key} to DynamoDB.")
+			else:
+				print(f"No high severity vulnerabilities (>7.0) found in report {key}. No DB write performed.")
+
+		except Exception as e:
+			print(f"Error processing file {key} from bucket {bucket}. Exception: {str(e)}")
+			raise e
+
+	return {
+		'statusCode': 200,
+		'body': json.dumps('XML processing and DynamoDB upload complete.')
+	}
+```
+
+Explanation:
+
+- Triggered by S3 ObjectCreated events.
+- Loads XML reports and scans all `<result>` entries.
+- Filters only findings with severity greater than 7.0.
+- Persists filtered results into DynamoDB with report key as partition key.
+- Stores severity as `Decimal` for DynamoDB numeric compatibility.
+- Writes one summary item per processed report.
+
+### 5.9 lambda/dynamodb_api/index.mjs
+
+```javascript
+// Replace your old require statements with these:
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
+
+const client = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(client);
+
+export const handler = async (event) => {
+  const params = {
+	TableName: "openvas-scan-findings", // Make sure this matches your DynamoDB table name
+  };
+
+  try {
+	const data = await docClient.send(new ScanCommand(params));
+	return {
+	  statusCode: 200,
+	  headers: {
+		"Access-Control-Allow-Origin": "*", // Important for your frontend
+		"Content-Type": "application/json"
+	  },
+	  body: JSON.stringify(data.Items),
+	};
+  } catch (err) {
+	return {
+	  statusCode: 500,
+	  body: JSON.stringify({ error: err.message }),
+	};
+  }
+};
+```
+
+Explanation:
+
+- Uses AWS SDK v3 document client to simplify DynamoDB JSON handling.
+- Scans the findings table and returns all rows.
+- Adds permissive CORS header for browser-based clients.
+- Returns raw `data.Items` as JSON body.
+- Wraps failures in a 500 error response.
 
 ## 6. Script and Playbook Code Explained
 
