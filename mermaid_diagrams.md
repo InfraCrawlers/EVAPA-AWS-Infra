@@ -191,3 +191,45 @@ flowchart LR
   J --> K["Patch with Ansible and SSM"]
   K --> L["Re-scan and compare results"]
 ```
+
+# API Workflow Pipelines
+
+```mermaid
+sequenceDiagram
+  participant Client
+  participant REST as REST API Gateway
+  participant Control as OpenVAS Control Lambda
+  participant OpenVAS as OpenVAS EC2
+  participant S3 as S3 Report Bucket
+  participant Parser as Parser Lambda
+  participant DynamoDB
+  participant HTTP as HTTP API Gateway
+  participant Reader as Findings Lambda
+
+  Client->>REST: Create/list port lists, targets, tasks, or start scan
+  REST->>Control: AWS_PROXY event
+  Control->>OpenVAS: GMP command over TLS 9390
+  OpenVAS->>S3: XML report uploaded by EC2 sync script
+  S3->>Parser: ObjectCreated event
+  Parser->>DynamoDB: PutItem for high-severity findings
+  Client->>HTTP: GET /findings
+  HTTP->>Reader: AWS_PROXY event
+  Reader->>DynamoDB: ScanCommand
+```
+
+# Serverless Architecture
+
+```mermaid
+flowchart LR
+  Client["API client or dashboard"] --> RestAPI["API Gateway REST API"]
+  RestAPI --> OpenVASLambdas["OpenVAS control Lambdas"]
+  OpenVASLambdas -->|"GMP TLS 9390"| OpenVAS["OpenVAS scanner EC2"]
+
+  OpenVAS -->|"XML report upload"| S3["S3 reports bucket"]
+  S3 --> Parser["s3triggerforlambda"]
+  Parser --> DDB["DynamoDB openvas-scan-findings"]
+
+  Client --> HttpAPI["API Gateway HTTP API"]
+  HttpAPI --> ReadLambda["dynamodb-read"]
+  ReadLambda --> DDB
+```

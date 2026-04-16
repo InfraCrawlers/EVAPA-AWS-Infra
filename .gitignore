@@ -29,8 +29,6 @@ Desktop.ini
 # AWS credentials (just in case)
 **/.aws/
 
-mermaid.md
-
 old_readme.md
 
 .codex

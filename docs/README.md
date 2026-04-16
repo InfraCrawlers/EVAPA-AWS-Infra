@@ -26,11 +26,13 @@ docs/
 |   |-- deployment-lifecycle.png
 |   |-- lab-architecture.png
 |   |-- scripts-flow.png
+|   |-- serverless_architecture.png
 |   |-- ssm-ansible-flow.png
 |   |-- terraform-bootstrap-flow.png
 |   |-- terraform-infra-architecture.png
 |   |-- terraform-infra-workflow.png
-|   `-- terraform-state-flow.png
+|   |-- terraform-state-flow.png
+|   `-- workflow_pipelines.png
 `-- screenshots/
     |-- aws-api-gateway-apis.png
     |-- aws-api-gateway-apis-alt.png
