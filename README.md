@@ -1,1101 +1,425 @@
-# EVAPA-AWS-Infra
+# EVAPA AWS Infrastructure
 
-Enterprise Vulnerability Assessment and Patching Automation on AWS.
+<p align="center">
+  <strong>Enterprise Vulnerability Assessment and Patching Automation on AWS</strong>
+</p>
 
-This repository provisions a complete vulnerability management lab using Terraform, deploys intentionally vulnerable Linux and Windows targets, runs OpenVAS scanning, exports scan reports to S3, parses high-severity findings into DynamoDB, and exposes results through API Gateway + Lambda.
+<p align="center">
+  <img src="https://img.shields.io/badge/IaC-Terraform-844FBA" alt="Terraform" />
+  <img src="https://img.shields.io/badge/Cloud-AWS-FF9900" alt="AWS" />
+  <img src="https://img.shields.io/badge/Scanner-OpenVAS%20%2F%20Greenbone-00843D" alt="OpenVAS Greenbone" />
+  <img src="https://img.shields.io/badge/Automation-AWS%20SSM-527FFF" alt="AWS Systems Manager" />
+  <img src="https://img.shields.io/badge/Runtime-Lambda-FF9900" alt="AWS Lambda" />
+  <img src="https://img.shields.io/badge/API-API%20Gateway-7A3EF0" alt="API Gateway" />
+  <img src="https://img.shields.io/badge/Storage-S3-569A31" alt="Amazon S3" />
+  <img src="https://img.shields.io/badge/Database-DynamoDB-4053D6" alt="DynamoDB" />
+  <img src="https://img.shields.io/badge/Monitoring-CloudWatch-FF4F8B" alt="CloudWatch" />
+  <img src="https://img.shields.io/badge/Automation-Ansible-EE0000" alt="Ansible" />
+</p>
 
-## 1. What This Project Does
+## Overview
 
-The platform implements a full lifecycle:
+EVAPA is a cloud security capstone project that builds an AWS-based vulnerability management lab with Terraform. The repository provisions vulnerable Linux and Windows EC2 targets, an OpenVAS scanner, serverless APIs for scan orchestration, S3 report storage, a Lambda parser, DynamoDB findings storage, and Ansible/SSM automation artifacts.
 
-1. Provision infrastructure with Terraform.
-2. Build vulnerable workloads (Linux and Windows EC2 instances).
-3. Deploy OpenVAS scanner on a dedicated EC2 host.
-4. Trigger and manage scans through serverless API endpoints.
-5. Upload OpenVAS XML reports to S3.
-6. Parse XML findings in Lambda and store high-severity issues in DynamoDB.
-7. Query findings via API.
-8. Apply remediation/patching via Ansible over AWS Systems Manager.
+The project demonstrates an end-to-end security operations workflow:
 
-## 2. High-Level Architecture
+1. Build cloud infrastructure from version-controlled Terraform.
+2. Deploy intentionally vulnerable Linux and Windows workloads for controlled testing.
+3. Scan the targets with OpenVAS/Greenbone.
+4. Export OpenVAS XML reports to S3.
+5. Parse high-severity findings into DynamoDB.
+6. Query findings through API Gateway and Lambda.
+7. Use Ansible over AWS Systems Manager for patching and remediation exercises.
 
-- Terraform backend:
-	- S3 bucket for remote state.
-	- DynamoDB table for state locking.
-- Compute:
-	- Ubuntu target EC2 (vulnerable baseline from user data script).
-	- Windows Server 2019 EC2 (vulnerable baseline from PowerShell user data).
-	- OpenVAS scanner EC2 (Greenbone Community Edition in Docker).
-- Security and access:
-	- IAM roles for EC2, Lambda, S3, DynamoDB.
-	- Security groups controlling scanner, targets, and Lambda-to-OpenVAS path.
-	- SSM-based management for instances.
-- Data and API:
-	- OpenVAS reports stored in S3.
-	- Parser Lambda transforms XML and writes findings to DynamoDB.
-	- HTTP API and REST API resources for retrieving findings and controlling OpenVAS entities.
+> [!IMPORTANT]
+> This repository intentionally creates vulnerable systems for education and demonstration. Deploy it only in an isolated lab account or sandbox VPC. Do not use these target configurations in production.
 
-## 3. Repository Structure
+## Why This Project Exists
+
+Enterprise vulnerability management often fails when scanning, prioritization, patching, and evidence collection are handled as separate manual tasks. EVAPA shows how those steps can be connected with Infrastructure as Code and cloud-native automation so a security team can move from asset deployment to scan evidence and remediation more consistently.
+
+The project is designed to answer practical questions:
+
+| Question | Repository answer |
+|---|---|
+| How can a repeatable lab be deployed for vulnerability assessment? | Terraform provisions EC2, IAM, S3, DynamoDB, Lambda, API Gateway, security groups, and backend state. |
+| How can scan reports become queryable data? | OpenVAS XML reports are uploaded to S3, parsed by Lambda, and stored in DynamoDB. |
+| How can scan control be exposed programmatically? | API Gateway routes invoke Python Lambdas that call OpenVAS GMP over port 9390. |
+| How can patching be practiced safely? | Ansible playbooks and SSM inventory support Linux and Windows remediation workflows in a lab. |
+
+## Key Features
+
+- Two-stage Terraform architecture with a one-time backend bootstrap and a main infrastructure stack.
+- Remote Terraform state stored in S3 with DynamoDB state locking.
+- Ubuntu and Windows Server EC2 targets configured for vulnerability assessment exercises.
+- Dedicated OpenVAS scanner EC2 host running the Greenbone Community Edition Docker stack.
+- REST API for OpenVAS actions: create/list port lists, create/list targets, create/list tasks, and start scans.
+- S3 event pipeline that parses OpenVAS XML reports and stores high-severity findings in DynamoDB.
+- HTTP API endpoint for reading stored findings.
+- IAM roles for EC2 SSM management, Lambda execution, DynamoDB access, and S3 report upload.
+- CloudWatch log groups for parser and findings-query Lambdas.
+- Ansible playbooks and SSM inventory for patching and remediation practice.
+- AWS console screenshots documenting the project build-out.
+
+## Technology Stack
+
+| Layer | Technologies |
+|---|---|
+| Infrastructure as Code | Terraform >= 1.5, HashiCorp AWS provider ~> 5.0 |
+| Cloud platform | AWS us-east-1 |
+| Compute | Amazon EC2, Ubuntu 20.04, Ubuntu 22.04, Windows Server 2019 |
+| Vulnerability scanning | OpenVAS / Greenbone Community Edition, python-gvm |
+| Serverless | AWS Lambda with Python 3.12, Python 3.11, and Node.js 20.x |
+| API layer | API Gateway REST API for OpenVAS control, API Gateway HTTP API for findings |
+| Storage | Amazon S3 for Terraform state and OpenVAS reports |
+| Database | DynamoDB for Terraform locks and parsed scan findings |
+| Operations | AWS Systems Manager, Ansible, CloudWatch Logs |
+| Scripts | Bash, PowerShell, Python |
+
+## Repository Structure
 
 ```text
 .
 |-- README.md
-|-- terraform.tfstate
-|-- aws/
+|-- image.png
+|-- image-1.png
+|-- image-2.png
+|-- image-3.png
+|-- image-4.png
+|-- image-5.png
+|-- image-6.png
 |-- terraform-bootstrap/
 |   |-- main.tf
 |   `-- README.md
 `-- terraform-infra/
-		|-- ansible_hosts.tf
-		|-- apigateway.tf
-		|-- backend.tf
-		|-- cloudwatch.tf
-		|-- dynamodb.tf
-		|-- ec2.tf
-		|-- iam.tf
-		|-- lambda_api.tf
-		|-- lambda_parser.tf
-		|-- openvas_api.tf
-		|-- openvas_lambda.tf
-		|-- outputs.tf
-		|-- provider.tf
-		|-- README.md
-		|-- s3.tf
-		|-- sg.tf
-		|-- variables.tf
-		|-- versions.tf
-		|-- lambda/
-		|-- packages/
-		|-- playbooks/
-		`-- scripts/
+    |-- backend.tf
+    |-- provider.tf
+    |-- versions.tf
+    |-- variables.tf
+    |-- ec2.tf
+    |-- sg.tf
+    |-- iam.tf
+    |-- s3.tf
+    |-- dynamodb.tf
+    |-- lambda_api.tf
+    |-- lambda_parser.tf
+    |-- openvas_lambda.tf
+    |-- openvas_api.tf
+    |-- apigateway.tf
+    |-- cloudwatch.tf
+    |-- ansible_hosts.tf
+    |-- outputs.tf
+    |-- README.md
+    |-- lambda/
+    |-- packages/
+    |-- playbooks/
+    `-- scripts/
 ```
 
-## 4. Terraform Code Explained (File by File)
+| Path | Purpose |
+|---|---|
+| `terraform-bootstrap/` | One-time stack that creates the S3 remote state bucket and DynamoDB lock table used by the main Terraform stack. |
+| `terraform-infra/` | Main AWS infrastructure stack for the vulnerability lab, scanner, APIs, storage, IAM, and automation assets. |
+| `terraform-infra/lambda/` | Lambda source files and deployment zip artifacts for OpenVAS control, report parsing, and findings reads. |
+| `terraform-infra/packages/` | Prebuilt Lambda layer artifact used by the OpenVAS control Lambdas. |
+| `terraform-infra/playbooks/` | Ansible playbooks and SSM inventory for lab setup and remediation workflows. |
+| `terraform-infra/scripts/` | EC2 user-data scripts and OpenVAS report sync script. |
+| `image*.png` | AWS console screenshots used as visual evidence for presentations. |
 
-### terraform-bootstrap/
+## Architecture
 
-#### terraform-bootstrap/main.tf
-One-time bootstrap stack for Terraform state infrastructure:
+![alt text](<Lab Architecture.png>)
 
-- Creates S3 bucket `capstone-terraform-state-vulnmgmt-7f3a`.
-- Enables bucket versioning.
-- Enforces SSE-S3 encryption.
-- Blocks all public access.
-- Creates DynamoDB lock table `terraform-state-locks`.
+## Request And Data Flow
 
-Run this once before main infrastructure deployment.
+![alt text](<Dataflow Sequence.png>)
 
-### terraform-infra/
+## Bootstrap Vs Infra
 
-#### backend.tf
-Configures Terraform backend to use:
+The repository is intentionally split into two Terraform roots.
 
-- S3 bucket: `capstone-terraform-state-vulnmgmt-7f3a`
-- State key: `vuln-management/terraform.tfstate`
-- DynamoDB lock table: `terraform-state-locks`
-- Region: `us-east-1`
+| Layer | Folder | Run frequency | What it manages | Why it is separate |
+|---|---|---:|---|---|
+| Bootstrap | `terraform-bootstrap/` | Once per AWS account/project | S3 state bucket and DynamoDB lock table | Terraform needs the backend to exist before `terraform-infra/` can use remote state. |
+| Main infrastructure | `terraform-infra/` | Whenever lab infrastructure changes | EC2, OpenVAS, Lambdas, APIs, IAM, S3 report buckets, DynamoDB findings, CloudWatch, Ansible artifacts | Keeps day-to-day infrastructure separate from foundational state management. |
 
-#### provider.tf
+## Terraform State Flow
 
-- Pins AWS provider (`~> 5.0`) and Terraform version (`>= 1.5.0`).
-- Uses `us-east-1`.
-- Reads an existing VPC by hardcoded ID.
-- Pulls subnet IDs in that VPC for Lambda VPC config.
+![alt text](<TF State Flow.png>)
 
-#### versions.tf
-Discovers latest matching AMIs for:
+## Deployment Lifecycle
 
-- Amazon Linux 2 (currently not used by active EC2 resource).
-- Ubuntu 20.04 (Linux vulnerable target).
-- Ubuntu 22.04 (OpenVAS scanner host).
-- Windows Server 2019 (Windows vulnerable target).
+![alt text](<Deployment LC.png>)
 
-#### variables.tf
-Project-wide inputs:
+There is no checked-in one-command deployment script. The supported deployment path is the Terraform CLI sequence shown below.
 
-- `project_name` default: `capstone-vuln-mgmt`
-- `instance_type` default: `t3.medium`
-- `key_name` optional EC2 key pair
-- `gmp_user` and `gmp_password` for OpenVAS GMP auth
+## Screenshots Gallery
 
-#### sg.tf
-Defines security groups:
+These screenshots are included in the repository as presentation evidence from the AWS console build-out. Some console views may include companion or manually created demonstration resources that are not declared in the current Terraform files; the Terraform sections below remain the source of truth for what this repository provisions.
 
-- `ec2_sg`
-	- Allows full TCP ingress only from OpenVAS SG for scanning.
-	- Allows all egress.
-- `openvas_sg`
-	- Exposes 80/443/22 publicly.
-	- Allows 9390 from Lambda SG (GMP over TLS).
-	- Allows all egress.
-- `lambda_sg`
-	- Egress on 9390 to VPC CIDR for Lambda -> OpenVAS connectivity.
+| IAM users | EC2 lab fleet |
+|---|---|
+| ![AWS IAM users](image.png) | ![AWS EC2 instances](image-1.png) |
 
-#### iam.tf
-IAM resources include:
+| API Gateway inventory | REST and HTTP APIs |
+|---|---|
+| ![AWS API Gateway APIs](image-2.png) | ![AWS API Gateway APIs alternate view](image-3.png) |
 
-- EC2/SSM role and instance profile:
-	- `AmazonSSMManagedInstanceCore`
-	- `AmazonSSMFullAccess`
-- Policy for OpenVAS EC2 to upload/list report bucket.
-- Policy for SSM/Ansible bucket object operations.
-- Lambda parser/read role permissions:
-	- S3 GetObject
-	- DynamoDB PutItem/BatchWriteItem/DescribeTable
-	- CloudWatch basic Lambda logging attachment.
+| Lambda functions | S3 buckets |
+|---|---|
+| ![AWS Lambda functions](image-4.png) | ![AWS S3 buckets](image-5.png) |
 
-#### ec2.tf
-Provisioned instances:
+| DynamoDB tables |
+|---|
+| ![AWS DynamoDB tables](image-6.png) |
 
-- `aws_instance.linux_ubuntu`
-	- Ubuntu 20.04
-	- Uses `scripts/linux.sh` to install vulnerable app stack.
-- `aws_instance.windows`
-	- Windows Server 2019
-	- Uses `scripts/windows.ps1` to establish vulnerable posture.
-- `aws_instance.openvas`
-	- Ubuntu 22.04, `t3.large`, 50GB root disk
-	- Uses `scripts/openvas.sh` to deploy Greenbone Docker stack.
+## Prerequisites
 
-#### s3.tf
-Creates two buckets:
+| Requirement | Notes |
+|---|---|
+| AWS account | Use an isolated lab account or sandbox account. The stack creates intentionally vulnerable targets. |
+| AWS credentials | Configure credentials for Terraform and AWS CLI before running commands. |
+| Terraform | Version 1.5 or newer. |
+| AWS region | The repository is configured for `us-east-1`. |
+| Existing VPC | `terraform-infra/provider.tf` currently references VPC ID `vpc-05e41bc3fcd905919`. Update this before deploying in another account. |
+| EC2 key pair | Optional. `key_name` defaults to `null` because SSM is the intended management path. |
+| Ansible and SSM plugin | Required only for running playbooks from a control machine. |
+| Python and zip tooling | Needed if Lambda artifacts are rebuilt locally. |
 
-- `${project_name}-openvas-reports` for scan report XML.
-- `${project_name}-ssm-ansible-bucket` for SSM/Ansible transport.
+## Quick Start
 
-Also applies:
+### 1. Clone And Enter The Repository
 
-- Public access block on SSM bucket.
-- Versioning on SSM bucket.
-- Placeholder object prefix for reports.
-
-#### dynamodb.tf
-Creates findings table:
-
-- Name: `openvas-scan-findings`
-- Billing: `PAY_PER_REQUEST`
-- PK: `pk` (string)
-- SK: `sk` (string)
-
-#### openvas_lambda.tf
-Deploys OpenVAS control Lambdas (Python 3.12) in VPC:
-
-- `openvas_create_port_list`
-- `openvas_create_target`
-- `openvas_create_task`
-- `openvas_start_scan`
-- `openvas_get_port_lists`
-- `openvas_get_targets`
-- `openvas_get_tasks`
-
-Important behavior:
-
-- Uses prebuilt zip artifacts from `terraform-infra/lambda/*/*.zip`.
-- Uses shared layer `packages/gvm_layer.zip` for python-gvm dependencies.
-- Injects env vars:
-	- `OPENVAS_IP` from OpenVAS private IP
-	- `GMP_USER`
-	- `GMP_PASSWORD`
-
-#### openvas_api.tf
-Builds REST API Gateway endpoints for OpenVAS operations:
-
-- Resources: `/port-lists`, `/targets`, `/tasks`.
-- Methods map to corresponding Lambda actions (GET/POST).
-- Extra route: `POST /tasks/{task_id}/start` for scan execution.
-- Includes deployment trigger hash to force redeploy on endpoint changes.
-
-#### lambda_parser.tf
-Parser pipeline:
-
-- Deploys `s3triggerforlambda` from `lambda/openvas_parser/openvas_lambda.zip`.
-- Injects `DYNAMODB_TABLE_NAME` env var.
-- Grants S3 invoke permission.
-- Configures S3 event notification for `openvas-reports/*.xml` object creation.
-
-#### lambda_api.tf
-Findings query pipeline:
-
-- Zips `lambda/dynamodb_api/index.mjs` into payload.
-- Deploys Node.js 20 Lambda `dynamodb-read`.
-- Grants DynamoDB read permissions (Scan/Query/GetItem).
-
-#### apigateway.tf
-Creates an HTTP API v2 endpoint:
-
-- Route: `GET /findings`
-- Integration: `dynamodb-read` Lambda
-- Stage: `v1`
-- Adds invoke permission for API Gateway.
-
-Note: this repository contains both REST API (OpenVAS control plane) and HTTP API (findings query). This is valid, but teams should keep route ownership clear.
-
-#### cloudwatch.tf
-Creates log groups (7-day retention) for:
-
-- Parser Lambda.
-- DynamoDB read Lambda.
-
-#### ansible_hosts.tf
-Generates local Ansible inventory file (`hosts.ini`) with Ubuntu instance IP and SSH settings.
-
-#### outputs.tf
-Outputs:
-
-- EC2 instance IDs for Ubuntu, Windows, OpenVAS.
-- API base URL from REST API stage.
-
-## 5. Lambda Code Explained
-
-### OpenVAS control Lambdas (Python)
-
-All OpenVAS control Lambdas follow a similar structure: imports, shared GMP connection helper, request parsing, one GMP action, and API Gateway-style JSON response.
-
-### 5.1 lambda/create_port_list/create_port_list.py
-
-```python
-import os
-import json
-from contextlib import contextmanager
-from gvm.connections import TLSConnection
-from gvm.protocols.gmp import Gmp
-from gvm.transforms import EtreeTransform
-from gvm.errors import GvmError
-
-@contextmanager
-def get_gmp_connection():
-	openvas_ip = os.environ['OPENVAS_IP']
-	gmp_user = os.environ['GMP_USER']
-	gmp_password = os.environ['GMP_PASSWORD']
-    
-	connection = TLSConnection(hostname=openvas_ip, port=9390)
-	transform = EtreeTransform()
-    
-	with Gmp(connection=connection, transform=transform) as gmp:
-		gmp.authenticate(gmp_user, gmp_password)
-		yield gmp
-
-def lambda_handler(event, context):
-	try:
-		body = json.loads(event.get('body', '{}'))
-		name = body.get('name')
-		port_range = body.get('port_range')
-
-		if not name or not port_range:
-			return {'statusCode': 400, 'body': json.dumps({'error': 'Missing name or port_range'})}
-
-		with get_gmp_connection() as gmp:
-			response = gmp.create_port_list(name=name, port_range=port_range)
-			port_list_id = response.get('id')
-            
-		return {
-			'statusCode': 200,
-			'body': json.dumps({'port_list_id': port_list_id})
-		}
-	except GvmError as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
-	except Exception as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal server error', 'details': str(e)})}
+```bash
+git clone https://github.com/InfraCrawlers/EVAPA-AWS-Infra.git
+cd EVAPA-AWS-Infra
 ```
 
-Explanation :
-
-- Reads OpenVAS connection credentials from environment variables.
-- Opens a TLS GMP session on port 9390 and authenticates before use.
-- Expects `name` and `port_range` in request body.
-- Returns HTTP 400 if required inputs are missing.
-- Calls `gmp.create_port_list(...)` and returns generated `port_list_id`.
-- Separately handles GVM-specific errors and unexpected runtime errors.
-
-### 5.2 lambda/create_target/create_target.py
-
-```python
-import os
-import json
-import enum
-from contextlib import contextmanager
-from gvm.connections import TLSConnection
-from gvm.protocols.gmp import Gmp
-from gvm.transforms import EtreeTransform
-from gvm.errors import GvmError
-
-# The Ultimate Bulletproof AliveTest Import
-# Greenbone aggressively moves this Enum between GMP version files.
-# We try the specific version modules, and if all else fails, 
-# we build a perfect mock Enum that bypasses their strict type-check.
-try:
-	from gvm.protocols.gmpv224 import AliveTest
-except ImportError:
-	try:
-		from gvm.protocols.gmpv225 import AliveTest
-	except ImportError:
-		try:
-			from gvm.protocols.gmpv226 import AliveTest
-		except ImportError:
-			class AliveTest(enum.Enum):
-				CONSIDER_ALIVE = "Consider Alive"
-				SCAN_CONFIG_DEFAULT = "Scan Config Default"
-
-@contextmanager
-def get_gmp_connection():
-	openvas_ip = os.environ['OPENVAS_IP']
-	gmp_user = os.environ['GMP_USER']
-	gmp_password = os.environ['GMP_PASSWORD']
-    
-	connection = TLSConnection(hostname=openvas_ip, port=9390)
-	transform = EtreeTransform()
-    
-	with Gmp(connection=connection, transform=transform) as gmp:
-		gmp.authenticate(gmp_user, gmp_password)
-		yield gmp
-
-# Helper to find an ID by Name
-def get_id_by_name(gmp, entity_type, name):
-	res = gmp.get_port_lists(filter_string=f"name='{name}'")
-	# Handle both lxml (xpath) and standard xml (findall)
-	elements = res.xpath('port_list') if hasattr(res, 'xpath') else res.findall('port_list')
-	if not elements:
-		raise ValueError(f"Could not find a {entity_type} named '{name}'")
-	return elements[0].get('id')
-
-def lambda_handler(event, context):
-	try:
-		body = json.loads(event.get('body', '{}'))
-		name = body.get('name')
-		hosts = body.get('hosts')
-		port_list_name = body.get('port_list_name') 
-        
-		# Parse the string into the specific Enum object python-gvm demands
-		alive_test_input = body.get('alive_test', 'Consider Alive')
-        
-		if alive_test_input == 'Consider Alive':
-			enum_val = AliveTest.CONSIDER_ALIVE
-		elif alive_test_input == 'Scan Config Default':
-			enum_val = AliveTest.SCAN_CONFIG_DEFAULT
-		else:
-			enum_val = AliveTest.CONSIDER_ALIVE
-
-		if not all([name, hosts, port_list_name]):
-			return {'statusCode': 400, 'body': json.dumps({'error': 'Missing name, hosts, or port_list_name'})}
-
-		with get_gmp_connection() as gmp:
-			# Resolve the name to an ID first
-			port_list_id = get_id_by_name(gmp, 'port_list', port_list_name)
-            
-			# Pass the precise Enum object (whether real or mocked)
-			response = gmp.create_target(
-				name=name,
-				hosts=hosts,
-				port_list_id=port_list_id,
-				alive_test=enum_val 
-			)
-			target_id = response.get('id')
-            
-		return {
-			'statusCode': 200,
-			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-			'body': json.dumps({'message': 'Target created', 'target_id': target_id})
-		}
-	except ValueError as ve:
-		return {'statusCode': 404, 'body': json.dumps({'error': str(ve)})}
-	except GvmError as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
-	except Exception as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal server error', 'details': str(e)})}
-```
-
-Explanation :
-
-- Uses compatibility imports for `AliveTest` across multiple python-gvm protocol versions.
-- Includes fallback enum definition if none of the versioned imports exist.
-- Resolves `port_list_name` to a real OpenVAS UUID before creating target.
-- Supports `alive_test` input with sane defaults.
-- Requires `name`, `hosts`, and `port_list_name`.
-- Returns CORS-enabled JSON response for browser clients.
-
-### 5.3 lambda/create_task/create_task.py
-
-```python
-import os
-import json
-from contextlib import contextmanager
-from gvm.connections import TLSConnection
-from gvm.protocols.gmp import Gmp
-from gvm.transforms import EtreeTransform
-from gvm.errors import GvmError
-
-@contextmanager
-def get_gmp_connection():
-	openvas_ip = os.environ['OPENVAS_IP']
-	gmp_user = os.environ['GMP_USER']
-	gmp_password = os.environ['GMP_PASSWORD']
-    
-	connection = TLSConnection(hostname=openvas_ip, port=9390)
-	transform = EtreeTransform()
-    
-	with Gmp(connection=connection, transform=transform) as gmp:
-		gmp.authenticate(gmp_user, gmp_password)
-		yield gmp
-
-# Updated Helper to find IDs by Name natively in Python
-def get_id_by_name(gmp, entity_type, name):
-	# Ask for all items without using server-side filters
-	if entity_type == 'target':
-		res = gmp.get_targets()
-	elif entity_type == 'config':
-		res = gmp.get_scan_configs()
-	elif entity_type == 'scanner':
-		res = gmp.get_scanners()
-        
-	elements = res.xpath(entity_type) if hasattr(res, 'xpath') else res.findall(entity_type)
-    
-	# Loop through the results and match the name exactly
-	for elem in elements:
-		elem_name = elem.find('name')
-		if elem_name is not None and elem_name.text == name:
-			return elem.get('id')
-            
-	raise ValueError(f"Could not find a {entity_type} named '{name}'")
-
-def lambda_handler(event, context):
-	try:
-		body = json.loads(event.get('body', '{}'))
-		name = body.get('name')
-		target_name = body.get('target_name')
-        
-		# Smart Defaults - if frontend doesn't provide these, use the standards
-		config_name = body.get('config_name', 'Full and fast')
-		scanner_name = body.get('scanner_name', 'OpenVAS Default')
-
-		if not all([name, target_name]):
-			return {'statusCode': 400, 'body': json.dumps({'error': 'Missing name or target_name'})}
-
-		with get_gmp_connection() as gmp:
-			# Resolve all names to their hidden UUIDs
-			target_id = get_id_by_name(gmp, 'target', target_name)
-			config_id = get_id_by_name(gmp, 'config', config_name)
-			scanner_id = get_id_by_name(gmp, 'scanner', scanner_name)
-
-			response = gmp.create_task(
-				name=name,
-				target_id=target_id,
-				config_id=config_id,
-				scanner_id=scanner_id
-			)
-			task_id = response.get('id')
-            
-		return {
-			'statusCode': 200,
-			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-			'body': json.dumps({'message': 'Task created', 'task_id': task_id})
-		}
-	except ValueError as ve:
-		return {'statusCode': 404, 'body': json.dumps({'error': str(ve)})}
-	except GvmError as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
-	except Exception as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal server error', 'details': str(e)})}
-```
-
-Explanation :
-
-- Builds tasks using human-readable names from frontend input.
-- Resolves target/config/scanner names to UUIDs in Python logic.
-- Uses defaults for config (`Full and fast`) and scanner (`OpenVAS Default`).
-- Returns 404 when a dependency name is not found.
-- Returns CORS-enabled success payload with `task_id`.
-
-### 5.4 lambda/start_scan/start_scan.py
-
-```python
-import os
-import json
-import urllib.parse
-from contextlib import contextmanager
-from gvm.connections import TLSConnection
-from gvm.protocols.gmp import Gmp
-from gvm.transforms import EtreeTransform
-from gvm.errors import GvmError
-
-@contextmanager
-def get_gmp_connection():
-	openvas_ip = os.environ['OPENVAS_IP']
-	gmp_user = os.environ['GMP_USER']
-	gmp_password = os.environ['GMP_PASSWORD']
-    
-	connection = TLSConnection(hostname=openvas_ip, port=9390)
-	transform = EtreeTransform()
-    
-	with Gmp(connection=connection, transform=transform) as gmp:
-		gmp.authenticate(gmp_user, gmp_password)
-		yield gmp
-
-# UPDATED HELPER: Native Python matching to bypass OpenVAS filter bugs
-def get_task_id_by_name(gmp, name):
-	# Ask for all tasks without using server-side filters
-	res = gmp.get_tasks()
-    
-	# Handle the XML parsing 
-	elements = res.xpath('task') if hasattr(res, 'xpath') else res.findall('task')
-    
-	# Loop through the results and match the name exactly
-	for elem in elements:
-		elem_name = elem.find('name')
-		if elem_name is not None and elem_name.text == name:
-			return elem.get('id')
-            
-	raise ValueError(f"Could not find a task named '{name}'")
-
-def lambda_handler(event, context):
-	try:
-		path_parameters = event.get('pathParameters') or {}
-        
-		# Grab the parameter from the URL and decode spaces/special characters
-		raw_task_name = path_parameters.get('task_id')
-		if not raw_task_name:
-			return {'statusCode': 400, 'body': json.dumps({'error': 'Missing task name in path'})}
-            
-		task_name = urllib.parse.unquote(raw_task_name)
-
-		with get_gmp_connection() as gmp:
-			# Resolve the name to the ID using our bulletproof python-side filter
-			task_id = get_task_id_by_name(gmp, task_name)
-            
-			# Start the scan using the resolved ID
-			response = gmp.start_task(task_id)
-            
-			# Extract the report_id generated for this specific scan run
-			report_id = None
-			if hasattr(response, 'xpath'):
-				report_elem = response.xpath('report_id')
-				if report_elem:
-					 report_id = report_elem[0].text
-			elif isinstance(response, dict):
-				report_id = response.get('id')
-            
-		return {
-			'statusCode': 200,
-			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-			'body': json.dumps({
-				'message': f'Scan "{task_name}" started successfully',
-				'report_id': report_id 
-			})
-		}
-	except ValueError as ve:
-		return {'statusCode': 404, 'body': json.dumps({'error': str(ve)})}
-	except GvmError as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
-	except Exception as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal server error', 'details': str(e)})}
-```
-
-Explanation :
-
-- Reads task identifier from API path parameter.
-- Decodes URL-encoded task name values.
-- Resolves task name to true task UUID.
-- Starts scan via `gmp.start_task`.
-- Attempts to extract and return generated `report_id`.
-- Returns 404 if task name cannot be found.
-
-### 5.5 lambda/get_port_lists/get_port_lists.py
-
-```python
-import os
-import json
-from contextlib import contextmanager
-from gvm.connections import TLSConnection
-from gvm.protocols.gmp import Gmp
-from gvm.transforms import EtreeTransform
-from gvm.errors import GvmError
-
-@contextmanager
-def get_gmp_connection():
-	openvas_ip = os.environ['OPENVAS_IP']
-	gmp_user = os.environ['GMP_USER']
-	gmp_password = os.environ['GMP_PASSWORD']
-    
-	connection = TLSConnection(hostname=openvas_ip, port=9390)
-	transform = EtreeTransform()
-    
-	with Gmp(connection=connection, transform=transform) as gmp:
-		gmp.authenticate(gmp_user, gmp_password)
-		yield gmp
-
-def lambda_handler(event, context):
-	try:
-		query_params = event.get('queryStringParameters') or {}
-		# 1. Grab 'id' from the query string instead of 'name'
-		search_id = query_params.get('id')
-
-		with get_gmp_connection() as gmp:
-			if search_id:
-				# 2. Use the direct ID lookup method
-				response = gmp.get_port_list(port_list_id=search_id)
-			else:
-				# Get all if no ID is provided
-				response = gmp.get_port_lists()
-
-			port_lists = []
-			for item in response.xpath('port_list'):
-				data = {
-					'id': item.get('id'),
-					'name': item.find('name').text if item.find('name') is not None else '',
-					'port_count': item.find('port_count').text if item.find('port_count') is not None else '0'
-				}
-                
-				# If a specific ID was requested, pull the exact port ranges
-				if search_id:
-					ranges = []
-					for pr in item.xpath('port_ranges/port_range'):
-						ranges.append(pr.text if pr.text else '')
-					data['port_ranges'] = ranges
-                    
-				port_lists.append(data)
-            
-		return {
-			'statusCode': 200,
-			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-			'body': json.dumps({'port_lists': port_lists})
-		}
-	except GvmError as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
-	except Exception as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal error', 'details': str(e)})}
-```
-
-Explanation:
-
-- Supports two modes: list all port lists or fetch one by `id` query string.
-- Always returns normalized JSON structure for frontend usage.
-- Includes optional port ranges only in specific-ID mode.
-- Handles GMP and generic errors with 500 responses.
-
-### 5.6 lambda/get_targets/get_targets.py
-
-```python
-import os
-import json
-from contextlib import contextmanager
-from gvm.connections import TLSConnection
-from gvm.protocols.gmp import Gmp
-from gvm.transforms import EtreeTransform
-from gvm.errors import GvmError
-
-@contextmanager
-def get_gmp_connection():
-	openvas_ip = os.environ['OPENVAS_IP']
-	gmp_user = os.environ['GMP_USER']
-	gmp_password = os.environ['GMP_PASSWORD']
-    
-	connection = TLSConnection(hostname=openvas_ip, port=9390)
-	transform = EtreeTransform()
-    
-	with Gmp(connection=connection, transform=transform) as gmp:
-		gmp.authenticate(gmp_user, gmp_password)
-		yield gmp
-
-def lambda_handler(event, context):
-	try:
-		query_params = event.get('queryStringParameters') or {}
-		# 1. Grab 'id' from the query string instead of 'name'
-		search_id = query_params.get('id')
-
-		with get_gmp_connection() as gmp:
-			if search_id:
-				# 2. Use the direct ID lookup method for targets
-				response = gmp.get_target(target_id=search_id)
-			else:
-				# Get all if no ID is provided
-				response = gmp.get_targets()
-
-			targets = []
-			for item in response.xpath('target'):
-				port_list_elem = item.find('port_list/name')
-                
-				data = {
-					'id': item.get('id'),
-					'name': item.find('name').text if item.find('name') is not None else '',
-					'port_list_name': port_list_elem.text if port_list_elem is not None else 'N/A'
-				}
-                
-				# If a specific ID was requested, pull the advanced host details
-				if search_id:
-					data['hosts'] = item.find('hosts').text if item.find('hosts') is not None else ''
-					data['exclude_hosts'] = item.find('exclude_hosts').text if item.find('exclude_hosts') is not None else ''
-					data['max_hosts'] = item.find('max_hosts').text if item.find('max_hosts') is not None else '1'
-                    
-				targets.append(data)
-            
-		return {
-			'statusCode': 200,
-			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-			'body': json.dumps({'targets': targets})
-		}
-	except GvmError as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
-	except Exception as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal error', 'details': str(e)})}
-```
-
-Explanation:
-
-- Supports list-all and get-by-id target retrieval.
-- Returns target ID, name, and port-list display name.
-- Adds host-specific fields only when querying a specific target.
-- Uses consistent response envelope and CORS headers.
-
-### 5.7 lambda/get_tasks/get_tasks.py
-
-```python
-def lambda_handler(event, context):
-	try:
-		query_params = event.get('queryStringParameters') or {}
-		search_id = query_params.get('id')
-
-		with get_gmp_connection() as gmp:
-			if search_id:
-				response = gmp.get_task(task_id=search_id)
-			else:
-				response = gmp.get_tasks()
-
-			tasks = []
-			for item in response.xpath('task'):
-				target_elem = item.find('target/name')
-                
-				# Grab the raw status
-				status = item.find('status').text if item.find('status') is not None else 'Unknown'
-                
-				data = {
-					'id': item.get('id'),
-					'name': item.find('name').text if item.find('name') is not None else '',
-					'status': status,
-					'target_name': target_elem.text if target_elem is not None else 'N/A'
-				}
-                
-				if search_id:
-					progress_elem = item.find('progress')
-					raw_progress = progress_elem.text if progress_elem is not None else '0'
-                    
-					# --- SMART PROGRESS LOGIC ---
-					if status == 'Done':
-						clean_progress = '100'
-					elif status in ['New', 'Requested', 'Queued'] or raw_progress == '-1':
-						clean_progress = '0'
-					else:
-						clean_progress = raw_progress
-                        
-					data['progress'] = clean_progress
-                    
-					report_count_elem = item.find('report_count')
-					scanner_elem = item.find('scanner/name')
-					data['report_count'] = report_count_elem.text if report_count_elem is not None else '0'
-					data['scanner_name'] = scanner_elem.text if scanner_elem is not None else 'N/A'
-
-				tasks.append(data)
-            
-		return {
-			'statusCode': 200,
-			'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-			'body': json.dumps({'tasks': tasks})
-		}
-	except GvmError as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
-	except Exception as e:
-		return {'statusCode': 500, 'body': json.dumps({'error': 'Internal error', 'details': str(e)})}
-```
-
-Explanation:
-
-- Retrieves all tasks or one task by `id`.
-- Returns task status and target name in all modes.
-- In specific-ID mode, computes normalized progress and includes report/scanner metadata.
-- Converts OpenVAS placeholders like `-1` progress into frontend-friendly values.
-- Note: current file starts directly at `lambda_handler`; imports/helper definitions are not in this file.
-
-### Parser and Data Lambdas
-
-### 5.8 lambda/openvas_parser/openvas_lambda.py
-
-```python
-import os
-import json
-import urllib.parse
-import xml.etree.ElementTree as ET
-from datetime import datetime
-from decimal import Decimal
-import boto3
-
-s3 = boto3.client('s3')
-dynamodb = boto3.resource('dynamodb')
-
-TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME', 'openvas-scan-findings')
-table = dynamodb.Table(TABLE_NAME)
-
-def lambda_handler(event, context):
-	for record in event['Records']:
-		bucket = record['s3']['bucket']['name']
-		key = urllib.parse.unquote_plus(record['s3']['object']['key'], encoding='utf-8')
-
-		try:
-			print(f"Fetching {key} from bucket {bucket}")
-			response = s3.get_object(Bucket=bucket, Key=key)
-			xml_content = response['Body'].read()
-
-			root = ET.fromstring(xml_content)
-            
-			high_severity_vulns = []
-
-			for result in root.findall('.//results/result'):
-				severity_text = result.findtext('severity')
-                
-				if severity_text:
-					try:
-						severity_score = float(severity_text)
-                        
-						if severity_score > 7.0:
-							host_elem = result.find('host')
-							host_ip = host_elem.text.strip() if (host_elem is not None and host_elem.text) else 'Unknown'
-                            
-							vuln_data = {
-								'vulnerability_name': result.findtext('name', 'Unknown'),
-								'host': host_ip,
-								'port': result.findtext('port', 'Unknown'),
-								'threat_level': result.findtext('threat', 'Unknown'),
-								'cvss_severity': Decimal(str(severity_score)), 
-								'nvt_oid': result.find('nvt').attrib.get('oid', 'Unknown') if result.find('nvt') is not None else 'Unknown'
-							}
-							high_severity_vulns.append(vuln_data)
-                            
-					except ValueError:
-						continue
-
-
-			if high_severity_vulns:
-				current_time = datetime.utcnow().isoformat()
-                
-				item = {
-					'pk': key, 
-					'sk': 'REPORT_DETAILS',
-					'processed_timestamp': current_time,
-					'total_high_severity_count': len(high_severity_vulns),
-					'vulnerabilities': high_severity_vulns
-				}
-
-				table.put_item(Item=item)
-				print(f"Successfully saved {len(high_severity_vulns)} high severity vulnerabilities for {key} to DynamoDB.")
-			else:
-				print(f"No high severity vulnerabilities (>7.0) found in report {key}. No DB write performed.")
-
-		except Exception as e:
-			print(f"Error processing file {key} from bucket {bucket}. Exception: {str(e)}")
-			raise e
-
-	return {
-		'statusCode': 200,
-		'body': json.dumps('XML processing and DynamoDB upload complete.')
-	}
-```
-
-Explanation:
-
-- Triggered by S3 ObjectCreated events.
-- Loads XML reports and scans all `<result>` entries.
-- Filters only findings with severity greater than 7.0.
-- Persists filtered results into DynamoDB with report key as partition key.
-- Stores severity as `Decimal` for DynamoDB numeric compatibility.
-- Writes one summary item per processed report.
-
-### 5.9 lambda/dynamodb_api/index.mjs
-
-```javascript
-// Replace your old require statements with these:
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
-
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
-
-export const handler = async (event) => {
-  const params = {
-	TableName: "openvas-scan-findings", // Make sure this matches your DynamoDB table name
-  };
-
-  try {
-	const data = await docClient.send(new ScanCommand(params));
-	return {
-	  statusCode: 200,
-	  headers: {
-		"Access-Control-Allow-Origin": "*", // Important for your frontend
-		"Content-Type": "application/json"
-	  },
-	  body: JSON.stringify(data.Items),
-	};
-  } catch (err) {
-	return {
-	  statusCode: 500,
-	  body: JSON.stringify({ error: err.message }),
-	};
-  }
-};
-```
-
-Explanation:
-
-- Uses AWS SDK v3 document client to simplify DynamoDB JSON handling.
-- Scans the findings table and returns all rows.
-- Adds permissive CORS header for browser-based clients.
-- Returns raw `data.Items` as JSON body.
-- Wraps failures in a 500 error response.
-
-## 6. Script and Playbook Code Explained
-
-### scripts/linux.sh
-User-data script that intentionally installs vulnerable Linux software versions and starts exposed services for scanning realism:
-
-- ProFTPD 1.3.5e
-- Struts 2.3.20.1 sample apps on Tomcat 8.5.15
-- Drupal 7.31
-- WordPress 4.7.1
-- Elasticsearch 1.1.1
-
-Also creates MySQL databases and service startup state.
-
-### scripts/windows.ps1
-User-data script that creates vulnerable Windows posture:
-
-- Disables Windows Update service/policy.
-- Enables legacy TLS protocol settings.
-- Installs older components and vulnerable service surface (including old Elasticsearch and FileZilla Server).
-- Adds startup task for persistence.
-
-### scripts/openvas.sh
-Bootstraps OpenVAS host:
-
-- Installs Python tooling, AWS CLI, SSM plugin, Ansible, python-gvm.
-- Generates and runs an Ansible playbook that:
-	- installs Docker and Compose,
-	- deploys Greenbone Community Edition,
-	- injects gmp-proxy (9390),
-	- schedules periodic report sync script.
-
-### scripts/auto.py
-Runs on OpenVAS host (cron) to:
-
-- Enumerate completed reports.
-- Download full XML via GMP socket.
-- Upload XML to S3 under `openvas-reports/`.
-- Track already-sent reports in local state file.
-
-### playbooks/win_patching.yml
-Windows remediation playbook:
-
-- Re-enables updates.
-- Stabilizes SSM/WinRM profile behavior.
-- Removes vulnerable Elasticsearch.
-- Installs Elasticsearch 7.17.10.
-- Applies critical/security updates with reboot handling.
-
-### playbooks/linux_patching.yml
-Linux remediation playbook to upgrade vulnerable stack to modern versions and patch OS.
-
-Current file includes unresolved git merge markers and conflicting host definitions. Resolve before use.
-
-### playbooks/inventory.ini
-Static inventory using `community.aws.aws_ssm` connection plugin for Linux and Windows instance IDs.
-
-## 7. API Endpoints
-
-### OpenVAS REST API (API Gateway REST)
-
-- `POST /v1/port-lists`
-- `GET /v1/port-lists`
-- `POST /v1/targets`
-- `GET /v1/targets`
-- `POST /v1/tasks`
-- `GET /v1/tasks`
-- `POST /v1/tasks/{task_id}/start`
-
-### Findings HTTP API (API Gateway HTTP v2)
-
-- `GET /v1/findings`
-
-## 8. End-to-End Deployment Steps
-
-### Prerequisites
-
-- AWS account and credentials configured locally.
-- Terraform >= 1.5.
-- AWS CLI.
-- Ansible (for remediation playbooks from operator workstation if needed).
-- Existing target VPC matching `provider.tf` data source ID.
-
-### Step 1: Bootstrap Terraform Backend
+### 2. Bootstrap Terraform State
 
 ```bash
 cd terraform-bootstrap
-terraform init
-terraform apply
-```
-
-This creates backend S3 and DynamoDB lock resources.
-
-### Step 2: Deploy Main Infrastructure
-
-```bash
-cd ../terraform-infra
 terraform init
 terraform plan
 terraform apply
 ```
 
-What gets deployed:
+This creates:
 
-- EC2 scanner + targets
-- IAM roles/policies/profiles
-- Security groups
-- S3 buckets
-- DynamoDB table
-- Lambda functions/layer integrations
-- API Gateways and permissions
-- CloudWatch log groups
+- S3 bucket `capstone-terraform-state-vulnmgmt-7f3a`
+- DynamoDB table `terraform-state-locks`
 
-### Step 3: Validate Infrastructure
+### 3. Configure Main Infrastructure Inputs
 
-Check:
+Create a local variable file if you need to override defaults:
 
-- EC2 instances are running and managed in SSM.
-- OpenVAS host exposes web UI (ports 80/443) and GMP proxy on 9390 internally.
-- Lambda functions exist and have expected env variables.
-- APIs deployed with stage `v1`.
+```hcl
+# terraform-infra/terraform.tfvars
+project_name  = "capstone-vuln-mgmt"
+instance_type = "t3.medium"
+key_name      = null
+gmp_user      = "admin"
+gmp_password  = "replace-with-a-strong-lab-password"
+```
 
-### Step 4: Run Scan Workflow
+Before applying in a new AWS account, update the VPC selection in `terraform-infra/provider.tf`.
 
-1. Create port list via API.
-2. Create target via API.
-3. Create task via API.
-4. Start task via API.
-5. Wait for OpenVAS report completion.
-6. `auto.py` sync uploads XML to S3.
-7. S3 event triggers parser Lambda.
-8. Parser writes high-severity findings to DynamoDB.
-9. Query findings through `GET /findings`.
+### 4. Deploy The Main Stack
 
-### Step 5: Perform Remediation
+```bash
+cd ../terraform-infra
+terraform init
+terraform validate
+terraform plan
+terraform apply
+```
 
-- Linux: run Ansible Linux patching playbook.
-- Windows: run Ansible Windows patching playbook.
-- Re-run scans and compare findings before/after patching.
+OpenVAS initialization can take time because the user-data script installs Docker, downloads Greenbone containers, starts the stack, and configures a report sync cron job.
 
-## 9. Operational Notes and Caveats
+## Required Variables
 
-- `provider.tf` currently pins a specific VPC ID; change for other environments.
-- Lambda artifacts (`*.zip`) and layer zip must be present before Terraform apply.
-- API design currently splits across REST and HTTP APIs. Consider standardizing if needed.
-- Two files currently contain unresolved merge conflict markers:
-	- `terraform-infra/playbooks/linux_patching.yml`
-	- `terraform-infra/lambda/get_tasks/get_tasks.py`
+| Variable | Default | Purpose |
+|---|---|---|
+| `project_name` | `capstone-vuln-mgmt` | Prefix used for project resources such as buckets, roles, and tags. |
+| `instance_type` | `t3.medium` | EC2 type for the Ubuntu and Windows target instances. |
+| `key_name` | `null` | Optional EC2 key pair. Leave null when managing instances with SSM. |
+| `gmp_user` | `admin` | OpenVAS GMP username passed to OpenVAS control Lambdas. |
+| `gmp_password` | `admin` | OpenVAS GMP password passed to OpenVAS control Lambdas. Override for any real lab run. |
 
-## 10. Security Notice
+## Deployment Order
 
-This project intentionally deploys vulnerable software and weak configurations for educational/lab use only. Do not deploy unchanged in production.
+1. Run `terraform-bootstrap` first.
+2. Confirm the S3 state bucket and DynamoDB lock table exist.
+3. Update the VPC ID in `terraform-infra/provider.tf` if deploying outside the original AWS account.
+4. Confirm Lambda zip artifacts and `packages/gvm_layer.zip` exist.
+5. Run `terraform-infra`.
+6. Wait for EC2 user-data initialization, especially the OpenVAS scanner.
+7. Validate APIs, buckets, DynamoDB, Lambda logs, and EC2 status.
+8. Run scans, upload reports, parse findings, and run patching playbooks.
+
+## Validation Steps
+
+After `terraform apply`, validate the deployment from multiple angles:
+
+```bash
+terraform output
+terraform output api_base_url
+aws ec2 describe-instances --region us-east-1
+aws s3 ls
+aws dynamodb describe-table --table-name openvas-scan-findings --region us-east-1
+aws logs describe-log-groups --log-group-name-prefix /aws/lambda --region us-east-1
+```
+
+The `api_base_url` output is the OpenVAS control REST API stage URL. The findings HTTP API created in `apigateway.tf` does not currently have a Terraform output, so retrieve that endpoint from the API Gateway console or add an output if needed.
+
+## Usage Examples
+
+Replace `API_BASE_URL` with `terraform output -raw api_base_url`.
+
+Create a port list:
+
+```bash
+curl -X POST "$API_BASE_URL/port-lists" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Full TCP","port_range":"T:1-65535"}'
+```
+
+Create a target:
+
+```bash
+curl -X POST "$API_BASE_URL/targets" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Ubuntu Target","hosts":["10.0.0.10"],"port_list_name":"Full TCP","alive_test":"Consider Alive"}'
+```
+
+Create a scan task:
+
+```bash
+curl -X POST "$API_BASE_URL/tasks" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Ubuntu Full Scan","target_name":"Ubuntu Target"}'
+```
+
+Start a scan by task ID:
+
+```bash
+curl -X POST "$API_BASE_URL/tasks/<task_id>/start"
+```
+
+Read parsed findings through the HTTP API:
+
+```bash
+FINDINGS_API_URL="https://<api-id>.execute-api.us-east-1.amazonaws.com/v1"
+curl "$FINDINGS_API_URL/findings"
+```
+
+## Patching Workflow
+
+The repository includes Ansible assets under `terraform-infra/playbooks/`.
+
+```bash
+cd terraform-infra
+ansible-galaxy collection install amazon.aws community.aws community.windows ansible.windows
+ansible-playbook -i playbooks/inventory.ini playbooks/linux_patching.yml
+ansible-playbook -i playbooks/inventory.ini playbooks/win_patching.yml
+```
+
+The checked-in `playbooks/inventory.ini` contains sample EC2 instance IDs from a previous run. Update those IDs after your own `terraform apply` before running playbooks. The inventory is configured for AWS SSM transport, which avoids direct SSH/RDP for patch operations.
+
+## Cleanup And Destroy
+
+Destroy the main lab before destroying the backend:
+
+```bash
+cd terraform-infra
+terraform destroy
+```
+
+If S3 report uploads were created outside Terraform, empty the report bucket before destroy:
+
+```bash
+aws s3 rm s3://capstone-vuln-mgmt-openvas-reports --recursive
+```
+
+Destroy the bootstrap backend only when you no longer need the remote state:
+
+```bash
+cd ../terraform-bootstrap
+terraform destroy
+```
+
+The bootstrap S3 bucket has `force_destroy = false`, so Terraform will not delete it while objects remain. This is intentional state-safety behavior.
+
+## Security Considerations
+
+- The EC2 targets are intentionally vulnerable. Keep them isolated.
+- The OpenVAS security group currently exposes ports `22`, `80`, and `443` to `0.0.0.0/0`.
+- API Gateway methods use `authorization = "NONE"` in the current Terraform.
+- `gmp_user` and `gmp_password` have weak defaults and are passed to Lambda environment variables.
+- `provider.tf` contains a hardcoded VPC ID, which should be parameterized before reuse.
+- The SSM role attaches `AmazonSSMFullAccess`, which is broad for a production environment.
+- The SSM bucket has public access blocked and versioning enabled. The OpenVAS reports bucket does not currently define an explicit public access block in Terraform.
+- Lambda-to-OpenVAS access is limited to TCP `9390` through the Lambda security group and OpenVAS security group relationship.
+- Terraform state is stored in an encrypted S3 bucket with DynamoDB locking.
+
+## Limitations
+
+- This is a lab environment, not a production deployment.
+- No `.github/workflows` CI/CD pipeline is present in the repository.
+- OpenVAS startup depends on public package repositories and container pulls during EC2 user-data execution.
+- Some Lambda zip files are committed as deployment artifacts; rebuild steps are manual.
+- The findings HTTP API endpoint is not currently exposed as a Terraform output.
+- The report sync script contains project-specific values such as bucket name and default OpenVAS credentials.
+- There is no NAT Gateway, private endpoint design, or multi-account deployment model in the current Terraform.
+- The companion dashboard described in the provided dashboard documentation is not part of this repository.
+
+## Future Improvements
+
+- Parameterize VPC and subnet selection instead of hardcoding the VPC ID.
+- Add Terraform outputs for the findings HTTP API and important bucket/table names.
+- Store OpenVAS credentials in AWS Secrets Manager or SSM Parameter Store.
+- Restrict OpenVAS public ingress to trusted IP ranges or private access paths.
+- Add public access block and encryption configuration for the OpenVAS reports bucket.
+- Replace broad IAM permissions with least-privilege policies.
+- Add CI checks for `terraform fmt`, `terraform validate`, security scanning, and Markdown linting.
+- Add automated Lambda packaging or build scripts.
+- Add a formal module structure if the project grows beyond one lab environment.
+- Add cost estimates and budget alarms directly in Terraform.
+
+## Project Milestones
+
+The provided milestone materials frame the project as a Seneca Polytechnic Group 4 capstone focused on AWS-based vulnerability assessment, patch orchestration, reporting, and dashboard presentation. The repository represents the infrastructure implementation portion of that capstone.
+
+| Milestone theme | Evidence reflected in this repo |
+|---|---|
+| Scope and objectives | AWS vulnerability management pipeline for Linux and Windows EC2 instances. |
+| Requirements and planning | Terraform, OpenVAS, SSM, S3, DynamoDB, Lambda, and API Gateway selected as implementation components. |
+| Environment blueprint | Remote state, AWS account resources, EC2 targets, scanner, storage, and automation boundaries. |
+| Implementation and demo | Terraform infrastructure, Lambda source, report pipeline, Ansible playbooks, and AWS console screenshots. |
+| Presentation readiness | Organized root and folder READMEs, diagrams, lifecycle instructions, and security/limitations sections. |
+
+## Highlights
+
+- Designed and documented a two-stage Terraform deployment with remote state and state locking.
+- Automated AWS infrastructure for a vulnerability management lab using EC2, S3, DynamoDB, IAM, Lambda, API Gateway, CloudWatch, and SSM.
+- Integrated OpenVAS/Greenbone with serverless control functions using python-gvm and API Gateway.
+- Built a report ingestion pipeline from OpenVAS XML in S3 to structured high-severity DynamoDB records.
+- Practiced cloud security tradeoffs, including isolation, IAM scope, scanner access, state security, and known lab limitations.
+- Produced presentation-ready technical documentation with architecture diagrams, workflows, and operator runbooks.
+
+## References And Acknowledgements
+
+- Greenbone Community Edition / OpenVAS for vulnerability scanning.
+- HashiCorp Terraform and the Terraform AWS provider for Infrastructure as Code.
+- AWS services used in the repository: EC2, IAM, S3, DynamoDB, Lambda, API Gateway, Systems Manager, and CloudWatch Logs.
+- Seneca Polytechnic CYT300 capstone milestone materials and the supplied EVAPA dashboard documentation.
+- Group 4 capstone contributors listed in the provided project materials.
+
+## Documentation Map
+
+- [`terraform-bootstrap/README.md`](terraform-bootstrap/README.md) - backend bootstrap runbook.
+- [`terraform-infra/README.md`](terraform-infra/README.md) - main infrastructure runbook.
+- [`terraform-infra/lambda/README.md`](terraform-infra/lambda/README.md) - Lambda functions and packaging.
+- [`terraform-infra/scripts/README.md`](terraform-infra/scripts/README.md) - EC2 user-data and report sync scripts.
+- [`terraform-infra/playbooks/README.md`](terraform-infra/playbooks/README.md) - Ansible and SSM playbooks.
+- [`terraform-infra/packages/README.md`](terraform-infra/packages/README.md) - Lambda layer artifact.
