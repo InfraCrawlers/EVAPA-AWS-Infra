@@ -81,13 +81,9 @@ The project is designed to answer practical questions:
 ```text
 .
 |-- README.md
-|-- image.png
-|-- image-1.png
-|-- image-2.png
-|-- image-3.png
-|-- image-4.png
-|-- image-5.png
-|-- image-6.png
+|-- docs/
+|   |-- diagrams/
+|   `-- screenshots/
 |-- terraform-bootstrap/
 |   |-- main.tf
 |   `-- README.md
@@ -124,15 +120,16 @@ The project is designed to answer practical questions:
 | `terraform-infra/packages/` | Prebuilt Lambda layer artifact used by the OpenVAS control Lambdas. |
 | `terraform-infra/playbooks/` | Ansible playbooks and SSM inventory for lab setup and remediation workflows. |
 | `terraform-infra/scripts/` | EC2 user-data scripts and OpenVAS report sync script. |
-| `image*.png` | AWS console screenshots used as visual evidence for presentations. |
+| `docs/diagrams/` | Rendered architecture and workflow diagrams used by the README files. |
+| `docs/screenshots/` | AWS console screenshots used as visual evidence for presentations. |
 
 ## Architecture
 
-![alt text](<Lab Architecture.png>)
+![EVAPA lab architecture](docs/diagrams/lab-architecture.png)
 
 ## Request And Data Flow
 
-![alt text](<Dataflow Sequence.png>)
+![EVAPA dataflow sequence](docs/diagrams/dataflow-sequence.png)
 
 ## Bootstrap Vs Infra
 
@@ -145,11 +142,11 @@ The repository is intentionally split into two Terraform roots.
 
 ## Terraform State Flow
 
-![alt text](<TF State Flow.png>)
+![Terraform state flow](docs/diagrams/terraform-state-flow.png)
 
 ## Deployment Lifecycle
 
-![alt text](<Deployment LC.png>)
+![Deployment lifecycle](docs/diagrams/deployment-lifecycle.png)
 
 There is no checked-in one-command deployment script. The supported deployment path is the Terraform CLI sequence shown below.
 
@@ -159,19 +156,19 @@ These screenshots are included in the repository as presentation evidence from t
 
 | IAM users | EC2 lab fleet |
 |---|---|
-| ![AWS IAM users](image.png) | ![AWS EC2 instances](image-1.png) |
+| ![AWS IAM users](docs/screenshots/aws-iam-users.png) | ![AWS EC2 instances](docs/screenshots/aws-ec2-instances.png) |
 
 | API Gateway inventory | REST and HTTP APIs |
 |---|---|
-| ![AWS API Gateway APIs](image-2.png) | ![AWS API Gateway APIs alternate view](image-3.png) |
+| ![AWS API Gateway APIs](docs/screenshots/aws-api-gateway-apis.png) | ![AWS API Gateway APIs alternate view](docs/screenshots/aws-api-gateway-apis-alt.png) |
 
 | Lambda functions | S3 buckets |
 |---|---|
-| ![AWS Lambda functions](image-4.png) | ![AWS S3 buckets](image-5.png) |
+| ![AWS Lambda functions](docs/screenshots/aws-lambda-functions.png) | ![AWS S3 buckets](docs/screenshots/aws-s3-buckets.png) |
 
 | DynamoDB tables |
 |---|
-| ![AWS DynamoDB tables](image-6.png) |
+| ![AWS DynamoDB tables](docs/screenshots/aws-dynamodb-tables.png) |
 
 ## Prerequisites
 

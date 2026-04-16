@@ -92,7 +92,7 @@ This overlaps with `scripts/linux.sh`, which also builds the vulnerable Linux ta
 
 ## SSM Transport Flow
 
-![alt text](<SSM flow.png>)
+![SSM Ansible transport flow](../../docs/diagrams/ssm-ansible-flow.png)
 
 ## Common Mistakes
 

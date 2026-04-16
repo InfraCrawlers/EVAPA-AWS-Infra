@@ -71,7 +71,7 @@ The subfolders are not Terraform modules in the current implementation. They are
 
 ## Architecture
 
-![alt text](Architecture.png)
+![Terraform infrastructure architecture](../docs/diagrams/terraform-infra-architecture.png)
 
 ## Resources Managed
 
@@ -89,7 +89,7 @@ The subfolders are not Terraform modules in the current implementation. They are
 
 ## Main Workflow
 
-![alt text](Workflow.png)
+![Terraform infrastructure workflow](../docs/diagrams/terraform-infra-workflow.png)
 
 ## Prerequisites
 

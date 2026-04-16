@@ -32,7 +32,7 @@ terraform {
 
 Run this folder before running `terraform-infra/`.
 
-![alt text](terraform-bootstrap.png)
+![Terraform bootstrap flow](../docs/diagrams/terraform-bootstrap-flow.png)
 
 ## Prerequisites
 

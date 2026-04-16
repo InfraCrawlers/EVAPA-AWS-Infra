@@ -15,7 +15,7 @@ Terraform references these scripts from `ec2.tf`, and `openvas.sh` installs `aut
 
 ## Execution Flow
 
-![alt text](<Scripts flow.png>)
+![Scripts execution flow](../../docs/diagrams/scripts-flow.png)
 
 ## Linux Target Script
 
