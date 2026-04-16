@@ -171,6 +171,8 @@ The HTTP API in `apigateway.tf` exposes:
 |---|---|---|---|
 | `GET` | `/findings` | `dynamodb-read` | Return items from `openvas-scan-findings`. |
 
+For complete Lambda payloads, responses, IAM permissions, triggers, logs, and deployment artifacts, see [`lambda/README.md`](lambda/README.md).
+
 ## Deployment Validation
 
 Confirm Terraform-created resources:

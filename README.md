@@ -76,6 +76,24 @@ The project is designed to answer practical questions:
 | Operations | AWS Systems Manager, Ansible, CloudWatch Logs |
 | Scripts | Bash, PowerShell, Python |
 
+## Serverless Components
+
+The serverless layer connects API clients, OpenVAS, S3 report ingestion, and DynamoDB findings retrieval. Terraform defines seven OpenVAS control Lambdas with a shared Python/GMP pattern, one S3-triggered parser Lambda, and one Node.js findings query Lambda.
+
+| Function name | Purpose | Runtime | Trigger source | Connected AWS services | Main input | Main output | Related API route |
+|---|---|---|---|---|---|---|---|
+| `openvas_create_port_list` | Creates an OpenVAS port list through GMP. | Python 3.12 | API Gateway REST API | Lambda, API Gateway, VPC networking, OpenVAS EC2 | JSON body with `name`, `port_range` | JSON `port_list_id` | `POST /port-lists` |
+| `openvas_get_port_lists` | Lists OpenVAS port lists or returns details for one port list. | Python 3.12 | API Gateway REST API | Lambda, API Gateway, VPC networking, OpenVAS EC2 | Optional query string `id` | JSON `port_lists` array | `GET /port-lists` |
+| `openvas_create_target` | Creates an OpenVAS scan target using an existing port list name. | Python 3.12 | API Gateway REST API | Lambda, API Gateway, VPC networking, OpenVAS EC2 | JSON body with `name`, `hosts`, `port_list_name`, optional `alive_test` | JSON `message`, `target_id` | `POST /targets` |
+| `openvas_get_targets` | Lists OpenVAS targets or returns details for one target. | Python 3.12 | API Gateway REST API | Lambda, API Gateway, VPC networking, OpenVAS EC2 | Optional query string `id` | JSON `targets` array | `GET /targets` |
+| `openvas_create_task` | Creates an OpenVAS scan task from target/config/scanner names. | Python 3.12 | API Gateway REST API | Lambda, API Gateway, VPC networking, OpenVAS EC2 | JSON body with `name`, `target_name`, optional `config_name`, optional `scanner_name` | JSON `message`, `task_id` | `POST /tasks` |
+| `openvas_get_tasks` | Intended to list OpenVAS tasks or return details for one task. | Python 3.12 | API Gateway REST API | Lambda, API Gateway, VPC networking, OpenVAS EC2 | Optional query string `id` | JSON `tasks` array when helper/import issue is resolved | `GET /tasks` |
+| `openvas_start_scan` | Starts an OpenVAS task after resolving the route parameter to a task name. | Python 3.12 | API Gateway REST API | Lambda, API Gateway, VPC networking, OpenVAS EC2 | Path parameter `task_id`; code treats it as a URL-decoded task name | JSON `message`, `report_id` | `POST /tasks/{task_id}/start` |
+| `s3triggerforlambda` | Parses OpenVAS XML reports and stores high-severity findings. | Python 3.11 | S3 `ObjectCreated` event | Lambda, S3, DynamoDB, CloudWatch Logs | S3 event for `openvas-reports/*.xml` | DynamoDB item per report when severity > 7.0 | None |
+| `dynamodb-read` | Returns parsed findings from DynamoDB. | Node.js 20.x | API Gateway HTTP API | Lambda, API Gateway, DynamoDB, CloudWatch Logs | HTTP request with no required body | JSON array of DynamoDB items | `GET /findings` |
+
+See [`terraform-infra/lambda/README.md`](terraform-infra/lambda/README.md) for per-function payloads, responses, IAM permissions, deployment artifacts, and known implementation notes.
+
 ## Repository Structure
 
 ```text
