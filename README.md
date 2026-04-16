@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/IaC-Terraform-844FBA" alt="Terraform" />
   <img src="https://img.shields.io/badge/Cloud-AWS-FF9900" alt="AWS" />
-  <img src="https://img.shields.io/badge/Scanner-OpenVAS%20%2F%20Greenbone-00843D" alt="OpenVAS" />
+  <img src="https://img.shields.io/badge/Scanner-OpenVAS-00843D" alt="OpenVAS Greenbone" />
   <img src="https://img.shields.io/badge/Automation-AWS%20SSM-527FFF" alt="AWS Systems Manager" />
   <img src="https://img.shields.io/badge/Runtime-Lambda-FF9900" alt="AWS Lambda" />
   <img src="https://img.shields.io/badge/API-API%20Gateway-7A3EF0" alt="API Gateway" />
