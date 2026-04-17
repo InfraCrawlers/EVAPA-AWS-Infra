@@ -1,6 +1,6 @@
 # OpenVAS Screenshots
 
-This folder contains OpenVAS web interface screenshots extracted from `OpenVas_findings.docx` and renamed for repository use. They are presentation evidence for the vulnerability scanning workflow and should be treated as supporting documentation, not Terraform-managed infrastructure definitions.
+This folder contains OpenVAS web interface screenshots used as visual evidence for the vulnerability scanning workflow. The images support the project README by showing the scanner dashboard, scan tasks, reports, findings, asset views, security information, and scan configuration screens.
 
 ## Naming Convention
 
@@ -9,32 +9,65 @@ This folder contains OpenVAS web interface screenshots extracted from `OpenVas_f
 - Use a name that describes the screen or workflow stage.
 - Avoid generic names such as `image1.png`.
 
-## Screenshot Index
+## Workflow Gallery
 
-| File | What it shows |
+| Dashboard overview |
+|---|
+| ![OpenVAS dashboard overview](openvas-dashboard-overview.png) |
+| Shows the main OpenVAS dashboard with task severity, task status, CVE creation time, and NVT severity charts. |
+
+| Task summary | Task list |
 |---|---|
-| `openvas-dashboard-overview.png` | Dashboard charts for task severity, task status, CVE creation time, and NVT severity. |
-| `openvas-tasks-summary-dashboard.png` | Task dashboard with severity, high-results-per-host, and task status charts. |
-| `openvas-task-list-severity.png` | OpenVAS task list with completed scans and severity ratings. |
-| `openvas-reports-summary-dashboard.png` | Report dashboard with report severity and CVSS chart summaries. |
-| `openvas-report-list-severity-counts.png` | Report list showing per-report critical, high, medium, low, and log counts. |
-| `openvas-results-summary-dashboard.png` | Results dashboard with severity class and CVSS distribution. |
-| `openvas-results-critical-findings.png` | Findings list showing critical vulnerabilities and affected hosts. |
-| `openvas-vulnerabilities-summary.png` | Vulnerability dashboard and high-severity vulnerability list. |
-| `openvas-hosts-severity-topology.png` | Host severity distribution, host topology, and host inventory. |
-| `openvas-operating-systems-severity.png` | Operating system inventory and vulnerability severity distribution. |
-| `openvas-tls-certificates-inventory.png` | TLS certificate inventory and validity status. |
-| `openvas-nvt-security-information.png` | Network Vulnerability Test catalog summary and NVT records. |
-| `openvas-cve-security-information.png` | CVE catalog summary and CVE records. |
-| `openvas-cpe-security-information.png` | CPE catalog summary and CPE records. |
-| `openvas-configured-targets.png` | Configured scan targets for Ubuntu and Windows hosts. |
-| `openvas-port-lists.png` | Available OpenVAS port lists and TCP/UDP coverage. |
-| `openvas-scan-configs.png` | Available scan configurations such as Base, Discovery, Full and fast, and Log4Shell. |
+| ![OpenVAS tasks summary dashboard](openvas-tasks-summary-dashboard.png) | ![OpenVAS task list severity](openvas-task-list-severity.png) |
+| Task dashboard with severity, high-results-per-host, and status charts. | Completed scan tasks with report links and severity ratings. |
 
-## Usage
+| Reports summary | Report severity counts |
+|---|---|
+| ![OpenVAS reports summary dashboard](openvas-reports-summary-dashboard.png) | ![OpenVAS report list severity counts](openvas-report-list-severity-counts.png) |
+| Report dashboard with severity and CVSS chart summaries. | Per-report critical, high, medium, low, and log finding counts. |
 
-Reference screenshots from Markdown with repository-relative paths:
+| Results summary | Critical findings |
+|---|---|
+| ![OpenVAS results summary dashboard](openvas-results-summary-dashboard.png) | ![OpenVAS critical findings](openvas-results-critical-findings.png) |
+| Results dashboard with severity class and CVSS distribution. | Findings list showing critical vulnerabilities and affected hosts. |
 
-```md
-![OpenVAS dashboard overview](openvas-dashboard-overview.png)
-```
+| Vulnerability summary |
+|---|
+| ![OpenVAS vulnerability summary](openvas-vulnerabilities-summary.png) |
+| Vulnerability dashboard and high-severity vulnerability list. |
+
+## Asset And Inventory Views
+
+| Hosts severity and topology |
+|---|
+| ![OpenVAS hosts severity and topology](openvas-hosts-severity-topology.png) |
+| Host severity distribution, host topology, and discovered host inventory. |
+
+| Operating systems severity | TLS certificate inventory |
+|---|---|
+| ![OpenVAS operating systems severity](openvas-operating-systems-severity.png) | ![OpenVAS TLS certificate inventory](openvas-tls-certificates-inventory.png) |
+| Operating system inventory and vulnerability severity distribution. | TLS certificate inventory and validity status. |
+
+## Security Information Views
+
+| NVT security information |
+|---|
+| ![OpenVAS NVT security information](openvas-nvt-security-information.png) |
+| Network Vulnerability Test catalog summary and NVT records. |
+
+| CVE security information | CPE security information |
+|---|---|
+| ![OpenVAS CVE security information](openvas-cve-security-information.png) | ![OpenVAS CPE security information](openvas-cpe-security-information.png) |
+| CVE catalog summary and CVE records. | CPE catalog summary and CPE records. |
+
+## Configuration Views
+
+| Configured targets | Port lists |
+|---|---|
+| ![OpenVAS configured targets](openvas-configured-targets.png) | ![OpenVAS port lists](openvas-port-lists.png) |
+| Configured scan targets for Ubuntu and Windows hosts. | Available OpenVAS port lists and TCP/UDP coverage. |
+
+| Scan configs |
+|---|
+| ![OpenVAS scan configs](openvas-scan-configs.png) |
+| Available scan configurations such as Base, Discovery, Full and fast, and Log4Shell. |
