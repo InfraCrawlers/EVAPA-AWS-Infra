@@ -102,6 +102,7 @@ See [`terraform-infra/lambda/README.md`](terraform-infra/lambda/README.md) for p
 |-- docs/
 |   |-- diagrams/
 |   `-- screenshots/
+|       `-- openvas/
 |-- terraform-bootstrap/
 |   |-- main.tf
 |   `-- README.md
@@ -139,7 +140,7 @@ See [`terraform-infra/lambda/README.md`](terraform-infra/lambda/README.md) for p
 | `terraform-infra/playbooks/` | Ansible playbooks and SSM inventory for lab setup and remediation workflows. |
 | `terraform-infra/scripts/` | EC2 user-data scripts and OpenVAS report sync script. |
 | `docs/diagrams/` | Rendered architecture and workflow diagrams used by the README files. |
-| `docs/screenshots/` | AWS console screenshots used as visual evidence for presentations. |
+| `docs/screenshots/` | AWS console and OpenVAS screenshots used as visual evidence for presentations. |
 
 ## Architecture
 
@@ -170,7 +171,7 @@ There is no checked-in one-command deployment script. The supported deployment p
 
 ## Screenshots Gallery
 
-These screenshots are included in the repository as presentation evidence from the AWS console build-out. Some console views may include companion or manually created demonstration resources that are not declared in the current Terraform files; the Terraform sections below remain the source of truth for what this repository provisions.
+These screenshots are included in the repository as presentation evidence from the AWS console and OpenVAS scanner build-out. Some console views may include companion or manually created demonstration resources that are not declared in the current Terraform files; the Terraform sections below remain the source of truth for what this repository provisions.
 
 | IAM users | EC2 lab fleet |
 |---|---|
@@ -187,6 +188,41 @@ These screenshots are included in the repository as presentation evidence from t
 | DynamoDB tables |
 |---|
 | ![AWS DynamoDB tables](docs/screenshots/aws-dynamodb-tables.png) |
+
+### OpenVAS Scanner Evidence
+
+The OpenVAS screenshots document the scanner workflow after the lab targets were scanned: target setup, scan configuration, task/report status, findings, host severity, vulnerability catalogs, and security information views.
+
+| OpenVAS dashboard | Task summary |
+|---|---|
+| ![OpenVAS dashboard overview](docs/screenshots/openvas/openvas-dashboard-overview.png) | ![OpenVAS tasks summary dashboard](docs/screenshots/openvas/openvas-tasks-summary-dashboard.png) |
+
+| Reports | Results |
+|---|---|
+| ![OpenVAS reports summary dashboard](docs/screenshots/openvas/openvas-reports-summary-dashboard.png) | ![OpenVAS results summary dashboard](docs/screenshots/openvas/openvas-results-summary-dashboard.png) |
+
+| Critical findings | Vulnerability summary |
+|---|---|
+| ![OpenVAS critical findings](docs/screenshots/openvas/openvas-results-critical-findings.png) | ![OpenVAS vulnerability summary](docs/screenshots/openvas/openvas-vulnerabilities-summary.png) |
+
+<details>
+<summary>Additional OpenVAS screenshots</summary>
+
+| View | Screenshot |
+|---|---|
+| Task list severity | ![OpenVAS task list severity](docs/screenshots/openvas/openvas-task-list-severity.png) |
+| Report list severity counts | ![OpenVAS report list severity counts](docs/screenshots/openvas/openvas-report-list-severity-counts.png) |
+| Hosts severity and topology | ![OpenVAS hosts severity and topology](docs/screenshots/openvas/openvas-hosts-severity-topology.png) |
+| Operating systems severity | ![OpenVAS operating systems severity](docs/screenshots/openvas/openvas-operating-systems-severity.png) |
+| TLS certificate inventory | ![OpenVAS TLS certificate inventory](docs/screenshots/openvas/openvas-tls-certificates-inventory.png) |
+| NVT security information | ![OpenVAS NVT security information](docs/screenshots/openvas/openvas-nvt-security-information.png) |
+| CVE security information | ![OpenVAS CVE security information](docs/screenshots/openvas/openvas-cve-security-information.png) |
+| CPE security information | ![OpenVAS CPE security information](docs/screenshots/openvas/openvas-cpe-security-information.png) |
+| Configured targets | ![OpenVAS configured targets](docs/screenshots/openvas/openvas-configured-targets.png) |
+| Port lists | ![OpenVAS port lists](docs/screenshots/openvas/openvas-port-lists.png) |
+| Scan configs | ![OpenVAS scan configs](docs/screenshots/openvas/openvas-scan-configs.png) |
+
+</details>
 
 ## Prerequisites
 

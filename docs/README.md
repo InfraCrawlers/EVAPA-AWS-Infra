@@ -7,7 +7,7 @@ This folder stores visual assets used by the project README files.
 | Folder | Asset type | Naming convention |
 |---|---|---|
 | `diagrams/` | Rendered architecture, workflow, and process diagrams | Lowercase kebab-case, descriptive, ends in `.png` |
-| `screenshots/` | AWS console screenshots and presentation evidence | Lowercase kebab-case, service-oriented, ends in `.png` |
+| `screenshots/` | AWS console, OpenVAS, and presentation evidence screenshots | Lowercase kebab-case, service-oriented, ends in `.png` |
 
 ## Naming Rules
 
@@ -26,13 +26,13 @@ docs/
 |   |-- deployment-lifecycle.png
 |   |-- lab-architecture.png
 |   |-- scripts-flow.png
-|   |-- serverless_architecture.png
+|   |-- serverless-architecture.png
 |   |-- ssm-ansible-flow.png
 |   |-- terraform-bootstrap-flow.png
 |   |-- terraform-infra-architecture.png
 |   |-- terraform-infra-workflow.png
 |   |-- terraform-state-flow.png
-|   `-- workflow_pipelines.png
+|   `-- workflow-pipelines.png
 `-- screenshots/
     |-- aws-api-gateway-apis.png
     |-- aws-api-gateway-apis-alt.png
@@ -40,5 +40,23 @@ docs/
     |-- aws-ec2-instances.png
     |-- aws-iam-users.png
     |-- aws-lambda-functions.png
-    `-- aws-s3-buckets.png
+    |-- aws-s3-buckets.png
+    `-- openvas/
+        |-- openvas-configured-targets.png
+        |-- openvas-cpe-security-information.png
+        |-- openvas-cve-security-information.png
+        |-- openvas-dashboard-overview.png
+        |-- openvas-hosts-severity-topology.png
+        |-- openvas-nvt-security-information.png
+        |-- openvas-operating-systems-severity.png
+        |-- openvas-port-lists.png
+        |-- openvas-report-list-severity-counts.png
+        |-- openvas-reports-summary-dashboard.png
+        |-- openvas-results-critical-findings.png
+        |-- openvas-results-summary-dashboard.png
+        |-- openvas-scan-configs.png
+        |-- openvas-task-list-severity.png
+        |-- openvas-tasks-summary-dashboard.png
+        |-- openvas-tls-certificates-inventory.png
+        `-- openvas-vulnerabilities-summary.png
 ```

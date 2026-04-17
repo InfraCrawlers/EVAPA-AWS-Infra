@@ -14,7 +14,7 @@ Terraform uses this folder from:
 
 ## Serverless Architecture
 
-![Serverless architecture](../../docs/diagrams/serverless_architecture.png)
+![Serverless architecture](../../docs/diagrams/serverless-architecture.png)
 
 No scheduled Lambda functions are defined in the repository. The OpenVAS report sync schedule is a cron job on the OpenVAS EC2 instance, not a Lambda trigger.
 
@@ -78,7 +78,7 @@ Shared log location:
 
 ## Workflow Pipelines
 
-![Workflow pipelines](../../docs/diagrams/workflow_pipelines.png)
+![Workflow pipelines](../../docs/diagrams/workflow-pipelines.png)
 
 ## API Route Reference
 
